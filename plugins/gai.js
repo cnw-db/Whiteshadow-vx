@@ -1,36 +1,47 @@
+//═══════════════════════════════════════════════//
+//                WHITESHADOW-MD                 //
+//═══════════════════════════════════════════════//
+//  ⚡ Feature : Smart AI Chat + Image Analysis
+//  👑 Developer : Chamod Nimsara (WhiteShadow)
+//  📡 Channel   : https://whatsapp.com/channel/0029Vb4fjWE1yT25R7epR110
+//═══════════════════════════════════════════════//
+
 const { cmd } = require('../command');
 const fetch = require('node-fetch');
 const FormData = require('form-data');
-const fs = require('fs');
+const { IMGBB_API_KEY } = require('../config');
 
 cmd({
     pattern: "aiask",
-    alias: ["imageai", "geminiai", "smartai"],
-    desc: "AI Smart Chat / Image Description",
-    category: "ai",
+    alias: ["geminiai", "imageai", "smartai"],
     react: "🤖",
+    desc: "Chat with Gemini AI or analyze an image intelligently",
+    category: "ai",
     filename: __filename
 }, async (client, message, match) => {
     try {
-        // Detect image (if replied)
         const media = message.quoted?.message?.imageMessage || message.message?.imageMessage;
         const userText = match || message.quoted?.text || "";
 
-        // If image is present → analyze image
+        // ─────── 🖼️ IMAGE MODE ───────
         if (media) {
             const buffer = await client.downloadMediaMessage(media);
 
-            // Upload to Catbox
+            if (!IMGBB_API_KEY) {
+                return await message.reply("⚠️ *IMGBB_API_KEY not found!* Please add it in your config.env file.");
+            }
+
+            // Upload to imgbb (temporary, auto-delete in 5min)
             const formData = new FormData();
-            formData.append("fileToUpload", buffer, "image.jpg");
+            formData.append("image", buffer.toString("base64"));
 
-            const catboxRes = await fetch("https://catbox.moe/user/api.php", {
-                method: "POST",
-                body: formData
-            });
-            const imageUrl = await catboxRes.text();
+            const uploadUrl = `https://api.imgbb.com/1/upload?expiration=300&key=${IMGBB_API_KEY}`;
+            const uploadRes = await fetch(uploadUrl, { method: "POST", body: formData });
+            const uploadJson = await uploadRes.json();
 
-            // API request with image
+            if (!uploadJson.success) return await message.reply("❌ Image upload failed!");
+
+            const imageUrl = uploadJson.data.url;
             const prompt = encodeURIComponent(userText || "මෙම ඡායාරූපය විස්තර කරන්න");
             const apiUrl = `https://api.nekolabs.web.id/ai/gemini/2.5-flash-lite?text=${prompt}&imageUrl=${encodeURIComponent(imageUrl)}`;
 
@@ -39,11 +50,11 @@ cmd({
 
             if (!aiJson.success) return await message.reply("😔 AI විස්තර ලබාගැනීමට අසමත් විය.");
 
-            return await message.reply(`🖼️ *Image Analysis Result:*\n\n${aiJson.result}`);
+            return await message.reply(`🖼️ *AI Image Description:*\n\n${aiJson.result}\n\n🕒 (Temporary image — auto deleted after 5 minutes)`);
         }
 
-        // If no image → normal AI chat
-        if (!userText) return await message.reply("🤖 කරුණාකර ප්‍රශ්නයක් හෝ image එකක් යවන්න.");
+        // ─────── 💬 TEXT MODE ───────
+        if (!userText) return await message.reply("💬 කරුණාකර ප්‍රශ්නයක් හෝ image එකක් යවන්න.");
 
         const textPrompt = encodeURIComponent(userText);
         const aiRes = await fetch(`https://api.nekolabs.web.id/ai/gemini/2.5-flash-lite?text=${textPrompt}`);

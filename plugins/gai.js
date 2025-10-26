@@ -12,7 +12,7 @@ const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
 
-// 🧩 Your temporary imgbb API key (auto-deletes images)
+// 🧩 imgbb API key
 const imgbbKey = "ee4d92af1027d2fe2874d4327c539d46";
 
 cmd({
@@ -28,7 +28,7 @@ cmd({
     let prompt = match?.trim() || "Describe this image.";
     let imageUrl = null;
 
-    // 🖼️ If quoted image available
+    // 🖼️ if user replied to an image
     if (message.quoted && message.quoted.imageMessage) {
       const imgPath = path.join(__dirname, "../temp", `${Date.now()}.jpg`);
       const imgBuffer = await message.quoted.download();
@@ -43,30 +43,30 @@ cmd({
       });
 
       const uploadData = await uploadRes.json();
-      if (uploadData?.data?.url) imageUrl = uploadData.data.url;
+      console.log("🖼️ Upload response:", uploadData);
 
-      fs.unlinkSync(imgPath); // auto delete temp file
+      if (uploadData?.data?.url) imageUrl = uploadData.data.url;
+      fs.unlinkSync(imgPath);
     }
 
-    // 🌐 Build Nekolabs API URL
+    // 🌐 build api url
     let apiURL = `https://api.nekolabs.web.id/ai/gemini/2.5-flash-lite?text=${encodeURIComponent(prompt)}`;
     if (imageUrl) apiURL += `&imageUrl=${encodeURIComponent(imageUrl)}`;
 
     const res = await fetch(apiURL);
     const data = await res.json();
 
-    // 🧠 Extract the real AI reply
-    const aiText =
-      data?.result ||
-      data?.message ||
-      data?.response ||
-      "⚠️ No valid text response received from API.";
+    console.log("🔍 Gemini API Response:", data);
 
-    // 💬 Send clean formatted message
+    if (!data || !data.result) {
+      return await message.reply("❌ *WhiteShadow AI v5:* No valid response from API.");
+    }
+
+    const aiText = data.result;
     await message.reply(`💬 *WhiteShadow AI v5:*\n\n${aiText}`);
 
-  } catch (error) {
-    console.error("WhiteShadow AI v5 Error:", error);
-    await message.reply("❌ *WhiteShadow AI v5 Error:*\nSomething went wrong while processing your request.");
+  } catch (e) {
+    console.error("❌ WhiteShadow AI v5 Error:", e);
+    await message.reply("⚠️ *WhiteShadow AI v5 Error:* Something went wrong while processing your request.");
   }
 });

@@ -1,7 +1,7 @@
 //═══════════════════════════════════════════════//
 //                WHITESHADOW-MD                 //
 //═══════════════════════════════════════════════//
-//  ⚡ Feature : WhiteShadow AI (Gemini 2.5 Lite)
+//  ⚡ Feature : WhiteShadow AI v5 (Gemini 2.5 Flash-Lite)
 //  👑 Developer : Chamod Nimsara (WhiteShadow)
 //  📡 Channel   : https://whatsapp.com/channel/0029Vb4fjWE1yT25R7epR110
 //═══════════════════════════════════════════════//
@@ -12,60 +12,61 @@ const FormData = require('form-data');
 const fs = require('fs');
 const path = require('path');
 
+// 🧩 Your temporary imgbb API key (auto-deletes images)
 const imgbbKey = "ee4d92af1027d2fe2874d4327c539d46";
 
 cmd({
   pattern: "ai5",
-  alias: ["gemini5", "aimg"],
-  desc: "Chat with WhiteShadow AI (supports image input)",
+  alias: ["gemini5", "whiteai"],
+  desc: "Chat or analyze images using WhiteShadow AI v5",
   category: "ai",
-  use: ".ai2 <prompt> (tag image optional)",
-  react: "🤖",
+  use: ".ai5 <prompt> or reply with image",
+  react: "⚡",
   filename: __filename
 }, async (client, message, match) => {
   try {
-    let prompt = match || "";
+    let prompt = match?.trim() || "Describe this image.";
     let imageUrl = null;
 
-    //==== 🖼️ If image quoted ====
+    // 🖼️ If quoted image available
     if (message.quoted && message.quoted.imageMessage) {
-      const mediaPath = path.join(__dirname, "../temp", `${Date.now()}.jpg`);
-      const buffer = await message.quoted.download();
-      fs.writeFileSync(mediaPath, buffer);
+      const imgPath = path.join(__dirname, "../temp", `${Date.now()}.jpg`);
+      const imgBuffer = await message.quoted.download();
+      fs.writeFileSync(imgPath, imgBuffer);
 
       const form = new FormData();
-      form.append("image", fs.createReadStream(mediaPath));
+      form.append("image", fs.createReadStream(imgPath));
 
-      const uploadRes = await fetch(`https://api.imgbb.com/1/upload?key=${imgbbKey}`, {
+      const uploadRes = await fetch(`https://api.imgbb.com/1/upload?expiration=600&key=${imgbbKey}`, {
         method: "POST",
         body: form
       });
-      const uploadJson = await uploadRes.json();
 
-      if (uploadJson?.data?.url) imageUrl = uploadJson.data.url;
+      const uploadData = await uploadRes.json();
+      if (uploadData?.data?.url) imageUrl = uploadData.data.url;
 
-      fs.unlinkSync(mediaPath); // delete temp file
+      fs.unlinkSync(imgPath); // auto delete temp file
     }
 
-    //==== ⚙️ Build API URL ====
-    let apiUrl = `https://api.nekolabs.web.id/ai/gemini/2.5-flash-lite?text=${encodeURIComponent(prompt)}`;
-    if (imageUrl) apiUrl += `&imageUrl=${encodeURIComponent(imageUrl)}`;
+    // 🌐 Build Nekolabs API URL
+    let apiURL = `https://api.nekolabs.web.id/ai/gemini/2.5-flash-lite?text=${encodeURIComponent(prompt)}`;
+    if (imageUrl) apiURL += `&imageUrl=${encodeURIComponent(imageUrl)}`;
 
-    const res = await fetch(apiUrl);
-    const json = await res.json();
+    const res = await fetch(apiURL);
+    const data = await res.json();
 
-    //==== ✅ Proper Response Check ====
-    const aiText = json?.result || json?.message || json?.response || null;
+    // 🧠 Extract the real AI reply
+    const aiText =
+      data?.result ||
+      data?.message ||
+      data?.response ||
+      "⚠️ No valid text response received from API.";
 
-    if (!aiText) {
-      return await message.reply("💬 *WhiteShadow AI:*\n\nIt seems the API didn’t return a proper text response. Try again with a clearer prompt.");
-    }
+    // 💬 Send clean formatted message
+    await message.reply(`💬 *WhiteShadow AI v5:*\n\n${aiText}`);
 
-    //==== 💬 Send AI Reply ====
-    await message.reply(`💬 *WhiteShadow AI:*\n\n${aiText}`);
-
-  } catch (err) {
-    console.error(err);
-    await message.reply("❌ *WhiteShadow AI Error:*\nAn error occurred while processing your request.");
+  } catch (error) {
+    console.error("WhiteShadow AI v5 Error:", error);
+    await message.reply("❌ *WhiteShadow AI v5 Error:*\nSomething went wrong while processing your request.");
   }
 });

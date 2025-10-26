@@ -15,8 +15,8 @@ const path = require('path');
 const imgbbKey = "ee4d92af1027d2fe2874d4327c539d46";
 
 cmd({
-  pattern: "ask2",
-  alias: ["aiask", "aimg"],
+  pattern: "ai2",
+  alias: ["gemini", "aimg"],
   desc: "Chat with WhiteShadow AI (supports image input)",
   category: "ai",
   use: ".ai2 <prompt> (tag image optional)",
@@ -27,7 +27,7 @@ cmd({
     let prompt = match || "";
     let imageUrl = null;
 
-    //==== 🖼️ Handle image if quoted ====
+    //==== 🖼️ If image quoted ====
     if (message.quoted && message.quoted.imageMessage) {
       const mediaPath = path.join(__dirname, "../temp", `${Date.now()}.jpg`);
       const buffer = await message.quoted.download();
@@ -42,30 +42,30 @@ cmd({
       });
       const uploadJson = await uploadRes.json();
 
-      if (uploadJson && uploadJson.data && uploadJson.data.url) {
-        imageUrl = uploadJson.data.url;
-      }
+      if (uploadJson?.data?.url) imageUrl = uploadJson.data.url;
 
-      fs.unlinkSync(mediaPath); // 🧹 Delete after upload
+      fs.unlinkSync(mediaPath); // delete temp file
     }
 
     //==== ⚙️ Build API URL ====
     let apiUrl = `https://api.nekolabs.web.id/ai/gemini/2.5-flash-lite?text=${encodeURIComponent(prompt)}`;
     if (imageUrl) apiUrl += `&imageUrl=${encodeURIComponent(imageUrl)}`;
 
-    //==== 📡 Fetch from API ====
     const res = await fetch(apiUrl);
     const json = await res.json();
 
-    if (!json || !json.success || !json.result) {
-      return await message.reply("💬 *WhiteShadow AI:*\n\nIt looks like the API didn't return any data. Try again!");
+    //==== ✅ Proper Response Check ====
+    const aiText = json?.result || json?.message || json?.response || null;
+
+    if (!aiText) {
+      return await message.reply("💬 *WhiteShadow AI:*\n\nIt seems the API didn’t return a proper text response. Try again with a clearer prompt.");
     }
 
-    //==== 💬 Send AI Response ====
-    await message.reply(`💬 *WhiteShadow AI:*\n\n${json.result}`);
+    //==== 💬 Send AI Reply ====
+    await message.reply(`💬 *WhiteShadow AI:*\n\n${aiText}`);
 
   } catch (err) {
     console.error(err);
-    await message.reply("❌ *WhiteShadow AI Error:*\nSomething went wrong while processing your request.");
+    await message.reply("❌ *WhiteShadow AI Error:*\nAn error occurred while processing your request.");
   }
 });

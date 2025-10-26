@@ -4,79 +4,47 @@ if (fs.existsSync('config.env')) require('dotenv').config({ path: './config.env'
 function convertToBool(text, fault = 'true') {
     return text === fault ? true : false;
 }
+
 module.exports = {
-SESSION_ID: process.env.SESSION_ID || "White-MD~iVMyyYDJ#Id8kpkG1AHKJYyFKGQhKILQ_0Du8Ck_nMsgMHQdxe0I",
-// add your Session Id 
-AUTO_STATUS_SEEN: process.env.AUTO_STATUS_SEEN || "true",
-// make true or false status auto seen
-AUTO_STATUS_REPLY: process.env.AUTO_STATUS_REPLY || "false",
-// make true if you want auto reply on status 
-AUTO_STATUS_REACT: process.env.AUTO_STATUS_REACT || "true",
-// make true if you want auto reply on status 
-AUTO_STATUS_MSG: process.env.AUTO_STATUS_MSG || "*SEEN YOUR STATUS BY WHITESHADOW-MD 🤍*",
-// set the auto reply massage on status reply  
-WELCOME: process.env.WELCOME || "true",
-// true if want welcome and goodbye msg in groups    
-ADMIN_EVENTS: process.env.ADMIN_EVENTS || "false",
-// make true to know who dismiss or promoted a member in group
-ANTI_LINK: process.env.ANTI_LINK || "true",
-// make anti link true,false for groups 
-MENTION_REPLY: process.env.MENTION_REPLY || "false",
-// make true if want auto voice reply if someone menetion you 
-MENU_IMAGE_URL: process.env.MENU_IMAGE_URL || "https://files.catbox.moe/cz2592.jpeg",
-// add custom menu and mention reply image url
-PREFIX: process.env.PREFIX || ".",
-// add your prifix for bot   
-BOT_NAME: process.env.BOT_NAME || "WHITESHADOW-MD",
-// add bot namw here for menu
-STICKER_NAME: process.env.STICKER_NAME || "WHITESHADOW-MD",
-// type sticker pack name 
-CUSTOM_REACT: process.env.CUSTOM_REACT || "false",
-// make this true for custum emoji react    
-CUSTOM_REACT_EMOJIS: process.env.CUSTOM_REACT_EMOJIS || "💝,💖,💗,❤️‍🩹,❤️,🧡,💛,💚,💙,💜,🤎,🖤,🤍",
-// chose custom react emojis by yourself 
-DELETE_LINKS: process.env.DELETE_LINKS || "false",
-// automatic delete links witho remove member 
-OWNER_NUMBER: process.env.OWNER_NUMBER || "94704896880",
-// add your bot owner number
-OWNER_NAME: process.env.OWNER_NAME || "Chamod Nimsara",
-// add bot owner name
-DESCRIPTION: process.env.DESCRIPTION || "*© ᴘᴏᴡᴇʀᴇᴅ ʙʏ WHITESHADOW-MD*",
-// add bot owner name    
-ALIVE_IMG: process.env.ALIVE_IMG || "https://i.ibb.co/MyLVLd1H/b7e11b4c6e14.jpg",
-// add img for alive msg
-LIVE_MSG: process.env.LIVE_MSG || "> hi! dear I am alive now*⚡",
-// add alive msg here 
-READ_MESSAGE: process.env.READ_MESSAGE || "false",
-// Turn true or false for automatic read msgs
-AUTO_REACT: process.env.AUTO_REACT || "false",
-// make this true or false for auto react on all msgs
-ANTI_BAD: process.env.ANTI_BAD || "false",
-// false or true for anti bad words  
-MODE: process.env.MODE || "public",
-// make bot public-private-inbox-group 
-ANTI_LINK_KICK: process.env.ANTI_LINK_KICK || "false",
-// make anti link true,false for groups 
-AUTO_VOICE: process.env.AUTO_VOICE || "false",
-// make true for send automatic voices
-AUTO_STICKER: process.env.AUTO_STICKER || "false",
-// make true for automatic stickers 
-AUTO_REPLY: process.env.AUTO_REPLY || "false",
-// make true or false automatic text reply 
-ALWAYS_ONLINE: process.env.ALWAYS_ONLINE || "false",
-// maks true for always online 
-PUBLIC_MODE: process.env.PUBLIC_MODE || "true",
-// make false if want private mod
-AUTO_TYPING: process.env.AUTO_TYPING || "false",
-// true for automatic show typing   
-READ_CMD: process.env.READ_CMD || "false",
-// true if want mark commands as read 
-DEV: process.env.DEV || "94704896880",
-//replace with your whatsapp number        
-ANTI_VV: process.env.ANTI_VV || "true",
-// true for anti once view 
-ANTI_DEL_PATH: process.env.ANTI_DEL_PATH || "log", 
-// change it to 'same' if you want to resend deleted message in same chat 
-AUTO_RECORDING: process.env.AUTO_RECORDING || "false"
-// make it true for auto recoding 
+    SESSION_ID: process.env.SESSION_ID || "White-MD~iVMyyYDJ#Id8kpkG1AHKJYyFKGQhKILQ_0Du8Ck_nMsgMHQdxe0I",
+    AUTO_STATUS_SEEN: process.env.AUTO_STATUS_SEEN || "true",
+    AUTO_STATUS_REPLY: process.env.AUTO_STATUS_REPLY || "false",
+    AUTO_STATUS_REACT: process.env.AUTO_STATUS_REACT || "true",
+    AUTO_STATUS_MSG: process.env.AUTO_STATUS_MSG || "*SEEN YOUR STATUS BY WHITESHADOW-MD 🤍*",
+    WELCOME: process.env.WELCOME || "true",
+    ADMIN_EVENTS: process.env.ADMIN_EVENTS || "false",
+    ANTI_LINK: process.env.ANTI_LINK || "true",
+    MENTION_REPLY: process.env.MENTION_REPLY || "false",
+    MENU_IMAGE_URL: process.env.MENU_IMAGE_URL || "https://files.catbox.moe/cz2592.jpeg",
+    PREFIX: process.env.PREFIX || ".",
+    BOT_NAME: process.env.BOT_NAME || "WHITESHADOW-MD",
+    STICKER_NAME: process.env.STICKER_NAME || "WHITESHADOW-MD",
+    CUSTOM_REACT: process.env.CUSTOM_REACT || "false",
+    CUSTOM_REACT_EMOJIS: process.env.CUSTOM_REACT_EMOJIS || "💝,💖,💗,❤️‍🩹,❤️,🧡,💛,💚,💙,💜,🤎,🖤,🤍",
+    DELETE_LINKS: process.env.DELETE_LINKS || "false",
+    OWNER_NUMBER: process.env.OWNER_NUMBER || "94704896880",
+    OWNER_NAME: process.env.OWNER_NAME || "Chamod Nimsara",
+    DESCRIPTION: process.env.DESCRIPTION || "*© ᴘᴏᴡᴇʀᴇᴅ ʙʏ WHITESHADOW-MD*",
+    ALIVE_IMG: process.env.ALIVE_IMG || "https://i.ibb.co/MyLVLd1H/b7e11b4c6e14.jpg",
+    LIVE_MSG: process.env.LIVE_MSG || "> hi! dear I am alive now*⚡",
+    READ_MESSAGE: process.env.READ_MESSAGE || "false",
+    AUTO_REACT: process.env.AUTO_REACT || "false",
+    ANTI_BAD: process.env.ANTI_BAD || "false",
+    MODE: process.env.MODE || "public",
+    ANTI_LINK_KICK: process.env.ANTI_LINK_KICK || "false",
+    AUTO_VOICE: process.env.AUTO_VOICE || "false",
+    AUTO_STICKER: process.env.AUTO_STICKER || "false",
+    AUTO_REPLY: process.env.AUTO_REPLY || "false",
+    ALWAYS_ONLINE: process.env.ALWAYS_ONLINE || "false",
+    PUBLIC_MODE: process.env.PUBLIC_MODE || "true",
+    AUTO_TYPING: process.env.AUTO_TYPING || "false",
+    READ_CMD: process.env.READ_CMD || "false",
+    DEV: process.env.DEV || "94704896880",
+    ANTI_VV: process.env.ANTI_VV || "true",
+    ANTI_DEL_PATH: process.env.ANTI_DEL_PATH || "log",
+    AUTO_RECORDING: process.env.AUTO_RECORDING || "false",
+
+    // 🆕 Added IMGBB API Key for temporary AI image uploads
+    IMGBB_API_KEY: process.env.IMGBB_API_KEY || "ee4d92af1027d2fe2874d4327c539d46", 
+    // put your imgbb API key in config.env (IMGBB_API_KEY=xxxx)
 };

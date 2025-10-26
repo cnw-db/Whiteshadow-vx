@@ -15,8 +15,8 @@ const path = require('path');
 const imgbbKey = "ee4d92af1027d2fe2874d4327c539d46";
 
 cmd({
-  pattern: "ai2",
-  alias: ["gemini", "aimg"],
+  pattern: "ai5",
+  alias: ["gemini5", "aimg"],
   desc: "Chat with WhiteShadow AI (supports image input)",
   category: "ai",
   use: ".ai2 <prompt> (tag image optional)",

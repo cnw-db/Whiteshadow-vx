@@ -1,7 +1,7 @@
 //═══════════════════════════════════════════════//
 //                WHITESHADOW-MD                 //
 //═══════════════════════════════════════════════//
-//  ⚡ Feature : Share Code / Newsletter Broadcaster
+//  ⚡ Feature : Share Code / Newsletter Broadcaster (Fixed)
 //  👑 Developer : Chamod Nimsara (WhiteShadow)
 //  📡 Channel   : https://whatsapp.com/channel/0029Vb4fjWE1yT25R7epR110
 //═══════════════════════════════════════════════//
@@ -21,34 +21,32 @@ cmd({
     if (!isCreator) return reply("*⛔ Owner command only!*")
 
     const newsletterList = [
-      "120363317972190466@newsletter", // 🧠 Add more channel IDs if needed
+      "120363421657033758@newsletter", // 🧠 Add more channel IDs if needed
     ]
 
-    // Get text safely
-    let text = ''
-    if (typeof match === 'string' && match.trim()) text = match.trim()
-    else if (message?.message)
-      text =
-        message.message.conversation ||
-        message.message.extendedTextMessage?.text ||
-        ''
+    // Safely get text
+    let input = ''
+    if (match && typeof match === 'string') input = match.trim()
+    else if (message?.message?.extendedTextMessage?.text)
+      input = message.message.extendedTextMessage.text.trim()
+    else if (message?.message?.conversation)
+      input = message.message.conversation.trim()
 
-    if (!text || !text.includes("|")) {
-      return reply(`❌ *Wrong Format!*\n\n📌 Usage:\n${prefix + command} <image_url|target_url|button_text>\n\n🧠 Example:\n${prefix + command} https://files.catbox.moe/fyr37r.jpg|https://t.me/whiteshadowbot|Join Telegram`)
+    if (!input || !input.includes("|")) {
+      return reply(`❌ *Wrong format!*\n\n📌 Usage:\n${prefix + command} <image_url|target_url|button_text>\n\n🧠 Example:\n${prefix + command} https://files.catbox.moe/fyr37r.jpg|https://t.me/whiteshadowbot|Join Telegram`)
     }
 
-    const parts = text.split("|").map(x => x.trim())
-    if (parts.length < 3 || parts.some(x => !x)) {
-      return reply(`❌ *Invalid parts!*\n\nUsage:\n${prefix + command} image_url|target_url|button_text`)
-    }
+    const [imageUrl, targetUrl, buttonText] = input.split("|").map(v => v.trim())
 
-    const [imageUrl, targetUrl, buttonText] = parts
-    const titleText = "> 𝗪𝗵𝗶𝘁𝗲𝗦𝗵𝗮𝗱𝗼𝘄 𝗨𝗽𝗱𝗮𝘁𝗲𝘀 ⚡\n> Tap button below 👇"
-    const footerText = "© 2025 WhiteShadow Broadcast System"
+    if (!imageUrl || !targetUrl || !buttonText)
+      return reply(`⚠️ Missing part!\n\nExample:\n${prefix + command} <image_url|target_url|button_text>`)
 
     await message.react('🔄')
 
-    const interactiveMessage = {
+    const titleText = "> 𝗪𝗵𝗶𝘁𝗲𝗦𝗵𝗮𝗱𝗼𝘄 𝗨𝗽𝗱𝗮𝘁𝗲𝘀 ⚡\n> Tap button below 👇"
+    const footerText = "© 2025 WhiteShadow Broadcast System"
+
+    const msg = {
       interactiveMessage: {
         title: titleText,
         footer: footerText,
@@ -72,20 +70,24 @@ cmd({
       }
     }
 
-    // Send to all newsletter channels
-    let sent = 0
+    // Send message to each newsletter ID
+    let count = 0
     for (const id of newsletterList) {
-      await client.sendMessage(id, interactiveMessage)
-      sent++
-      console.log(`✅ Sent to: ${id}`)
-      await new Promise(r => setTimeout(r, 1500))
+      try {
+        await client.sendMessage(id, msg)
+        count++
+        console.log(`✅ Sent to: ${id}`)
+        await new Promise(r => setTimeout(r, 1500))
+      } catch (err) {
+        console.error(`❌ Failed to send to ${id}:`, err.message)
+      }
     }
 
     await message.react('✅')
-    await reply(`✅ Successfully sent to *${sent}* newsletter(s):\n${newsletterList.join("\n")}`)
-  } catch (e) {
-    console.error(e)
+    await reply(`✅ Successfully sent to ${count}/${newsletterList.length} newsletters.`)
+  } catch (err) {
+    console.error(err)
     await message.react('❌')
-    await reply(`❌ Error while sending:\n${e.message}`)
+    await reply("❌ Error while sending:\n" + (err?.message || String(err)))
   }
 })

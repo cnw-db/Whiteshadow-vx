@@ -21,7 +21,7 @@ cmd({
     if (!isCreator) return reply("*⛔ Owner command only!*")
 
     const newsletterList = [
-      "120363421657033758@newsletter", // 🧠 Add more channel IDs if needed
+      "120363317972190466@newsletter", // 🧠 Add more channel IDs if needed
     ]
 
     // Safely get text

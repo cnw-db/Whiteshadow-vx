@@ -9,7 +9,7 @@
 const { cmd } = require('../command')
 
 cmd({
-    pattern: "broadcast",
+    pattern: "broadcast2",
     alias: ["bcnews", "newsletterbc", "bc"],
     desc: "Broadcast message to all subscribed newsletters (admin only)",
     category: "owner",

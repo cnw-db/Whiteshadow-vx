@@ -25,7 +25,7 @@ module.exports = {
     OWNER_NUMBER: process.env.OWNER_NUMBER || "94704896880",
     OWNER_NAME: process.env.OWNER_NAME || "Chamod Nimsara",
     DESCRIPTION: process.env.DESCRIPTION || "*© ᴘᴏᴡᴇʀᴇᴅ ʙʏ WHITESHADOW-MD*",
-    ALIVE_IMG: process.env.ALIVE_IMG || "https://i.ibb.co/MyLVLd1H/b7e11b4c6e14.jpg",
+    ALIVE_IMG: process.env.ALIVE_IMG || "https://files.catbox.moe/fyr37r.jpg",
     LIVE_MSG: process.env.LIVE_MSG || "> hi! dear I am alive now*⚡",
     READ_MESSAGE: process.env.READ_MESSAGE || "false",
     AUTO_REACT: process.env.AUTO_REACT || "false",

@@ -1,10 +1,4 @@
-//=====================================
-// 🎵 WhiteShadow-MD Spotify Plugin (Fixed)
-// 👨‍💻 Developer: Chamod Nimsara<ow ow මම තමා
-// ⚙️ API: https://izumiiiiiiii.dpdns.org
-//=====================================
-
-            // File: plugins/spotify.js
+// File: plugins/spotify.js creater- chamod 
 const { cmd } = require('../command');
 const { fetchJson } = require('../lib/functions');
 
@@ -27,7 +21,7 @@ cmd({
 
         let listText = `🎧 *WHITESHADOW-MD SPOTIFY SEARCH*\n\n🔍 Results for: *${q}*\n\n`;
         searchApi.data.slice(0, 10).forEach((item, i) => {
-            listText += `*${i + 1}.* ${item.title} - ${item.artist}\n🎵 Album: ${item.album}\n\n`;
+            listText += `*${i + 1}.* ${item.title} - ${item.artist}\n💿 Album: ${item.album}\n\n`;
         });
 
         const listMsg = await conn.sendMessage(
@@ -36,7 +30,7 @@ cmd({
             { quoted: mek }
         );
 
-        // 1st Listener — User selects track number
+        // Wait for user to reply with number
         const listListener = async (update) => {
             const msg = update.messages?.[0];
             if (!msg?.message) return;
@@ -45,33 +39,25 @@ cmd({
             const isReply = msg.message.extendedTextMessage?.contextInfo?.stanzaId === listMsg.key.id;
             if (!isReply) return;
 
-            conn.ev.off("messages.upsert", listListener); // stop listening
+            conn.ev.off("messages.upsert", listListener);
 
             const index = parseInt(text.trim()) - 1;
             if (isNaN(index) || index < 0 || index >= searchApi.data.length)
                 return await reply("❌ Invalid number!");
 
             const chosen = searchApi.data[index];
-            const cover = chosen.cover;
-            const title = chosen.title;
-            const artist = chosen.artist;
-            const trackUrl = chosen.url;
+            const { cover, title, artist, album, url: trackUrl } = chosen;
 
             const askMsg = await conn.sendMessage(
                 from,
                 {
                     image: { url: cover },
-                    caption:
-                        `🎵 *SONG INFO*\n\n` +
-                        `🎧 *Title:* ${title}\n` +
-                        `👤 *Artist:* ${artist}\n` +
-                        `💿 *Album:* ${chosen.album}\n\n` +
-                        `Reply "1" to *Download Song*.\nReply "0" to *Cancel*.\n\n${footer}`,
+                    caption: `🎵 *SONG INFO*\n\n🎧 *Title:* ${title}\n👤 *Artist:* ${artist}\n💿 *Album:* ${album}\n\nReply "1" to *Download Song*.\nReply "0" to *Cancel*.\n\n${footer}`,
                 },
                 { quoted: msg }
             );
 
-            // 2nd Listener — User chooses to download or cancel
+            // Wait for user to confirm download or cancel
             const typeListener = async (tUpdate) => {
                 const tMsg = tUpdate.messages?.[0];
                 if (!tMsg?.message) return;
@@ -97,16 +83,8 @@ cmd({
                             audio: { url: song.downloadUrl },
                             mimetype: "audio/mpeg",
                             fileName: `${song.title}.mp3`,
-                            contextInfo: {
-                                externalAdReply: {
-                                    title: song.title,
-                                    body: song.artist,
-                                    thumbnailUrl: song.cover,
-                                    mediaType: 1,
-                                    renderLargerThumbnail: true,
-                                    sourceUrl: trackUrl,
-                                },
-                            },
+                            ptt: false,
+                            caption: `🎶 *${song.title}*\n👤 ${song.artist}\n💿 Duration: ${song.duration}\n\n${footer}`
                         },
                         { quoted: tMsg }
                     );

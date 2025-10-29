@@ -1,79 +1,129 @@
 //=====================================
 // 🎵 WhiteShadow-MD Spotify Plugin (Fixed)
-// 👨‍💻 Developer: Chamod Nimsara
+// 👨‍💻 Developer: Chamod Nimsara<ow ow මම තමා
 // ⚙️ API: https://izumiiiiiiii.dpdns.org
 //=====================================
 
+            // File: plugins/spotify.js
 const { cmd } = require('../command');
-const axios = require('axios');
+const { fetchJson } = require('../lib/functions');
+
+const footer = "🎧 WHITESHADOW-MD | Spotify Downloader";
 
 cmd({
     pattern: "spotify",
-    alias: ["spot", "spplay"],
-    desc: "Download or preview Spotify songs easily",
-    category: "music",
-    react: "🎧",
+    alias: ["spotdl", "spdl"],
     use: ".spotify <song name>",
+    react: "🎶",
+    desc: "Search and download Spotify songs interactively",
+    category: "downloader",
     filename: __filename
-}, async (conn, mek, m, { text, reply }) => {
+}, async (conn, mek, m, { q, from, reply }) => {
     try {
-        if (!text) return reply("🎶 *Please enter a song name!*\n\n💡 Example: *.spotify Kamak Na*")
+        if (!q) return await reply("❌ Please enter a song name!\n\nExample:\n`.spotify Lelena`");
 
-        const apiUrl = `https://izumiiiiiiii.dpdns.org/downloader/spotifyplay?query=${encodeURIComponent(text)}`
-        const res = await axios.get(apiUrl, { timeout: 10000 }).catch(() => null)
-        
-        if (!res || !res.data || !res.data.status) {
-            return reply("⚠️ *Song not found or API unreachable!* 😢\nTry again in a few seconds.")
-        }
+        const searchApi = await fetchJson(`https://api.zenzxz.my.id/api/search/spotify?query=${encodeURIComponent(q)}`);
+        if (!searchApi.success || !searchApi.data?.length) return await reply("❌ No songs found!");
 
-        const song = res.data.result
-        const duration = (song.duration_ms / 1000 / 60).toFixed(2)
+        let listText = `🎧 *WHITESHADOW-MD SPOTIFY SEARCH*\n\n🔍 Results for: *${q}*\n\n`;
+        searchApi.data.slice(0, 10).forEach((item, i) => {
+            listText += `*${i + 1}.* ${item.title} - ${item.artist}\n🎵 Album: ${item.album}\n\n`;
+        });
 
-        const caption = `
-⬤───〔 *🎧 WhiteShadow-MD Spotify Player* 〕───⬤
+        const listMsg = await conn.sendMessage(
+            from,
+            { text: listText + `Reply with number to choose a song.\n\n${footer}` },
+            { quoted: mek }
+        );
 
-🎵 *Title:* ${song.title}
-🎤 *Artist(s):* ${song.artists}
-💽 *Album:* ${song.album}
-📅 *Released:* ${song.release_date}
-⏱️ *Duration:* ${duration} min
+        // 1st Listener — User selects track number
+        const listListener = async (update) => {
+            const msg = update.messages?.[0];
+            if (!msg?.message) return;
 
-🌐 *Spotify Link:* [Click Here](${song.external_url})
-⬇️ *Download (MP3):* [Get Song](${song.download})
+            const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
+            const isReply = msg.message.extendedTextMessage?.contextInfo?.stanzaId === listMsg.key.id;
+            if (!isReply) return;
 
-*🧠 Powered by WhiteShadow-MD x Izumi*
-`
+            conn.ev.off("messages.upsert", listListener); // stop listening
 
-        // Send image + caption
-        await conn.sendMessage(m.chat, {
-            image: { url: song.image },
-            caption,
-            contextInfo: {
-                externalAdReply: {
-                    title: `🎵 ${song.title}`,
-                    body: `${song.artists} • Spotify`,
-                    thumbnailUrl: song.image,
-                    sourceUrl: song.external_url,
-                    mediaType: 1,
-                    renderLargerThumbnail: true
+            const index = parseInt(text.trim()) - 1;
+            if (isNaN(index) || index < 0 || index >= searchApi.data.length)
+                return await reply("❌ Invalid number!");
+
+            const chosen = searchApi.data[index];
+            const cover = chosen.cover;
+            const title = chosen.title;
+            const artist = chosen.artist;
+            const trackUrl = chosen.url;
+
+            const askMsg = await conn.sendMessage(
+                from,
+                {
+                    image: { url: cover },
+                    caption:
+                        `🎵 *SONG INFO*\n\n` +
+                        `🎧 *Title:* ${title}\n` +
+                        `👤 *Artist:* ${artist}\n` +
+                        `💿 *Album:* ${chosen.album}\n\n` +
+                        `Reply "1" to *Download Song*.\nReply "0" to *Cancel*.\n\n${footer}`,
+                },
+                { quoted: msg }
+            );
+
+            // 2nd Listener — User chooses to download or cancel
+            const typeListener = async (tUpdate) => {
+                const tMsg = tUpdate.messages?.[0];
+                if (!tMsg?.message) return;
+
+                const tText = tMsg.message.conversation || tMsg.message.extendedTextMessage?.text;
+                const isReplyType = tMsg.message.extendedTextMessage?.contextInfo?.stanzaId === askMsg.key.id;
+                if (!isReplyType) return;
+
+                conn.ev.off("messages.upsert", typeListener);
+
+                if (tText.trim() === "1") {
+                    await conn.sendMessage(from, { text: "⏳ Downloading your song, please wait..." }, { quoted: tMsg });
+
+                    const downloadApi = await fetchJson(`https://api.nekolabs.web.id/downloader/spotify/v1?url=${encodeURIComponent(trackUrl)}`);
+                    if (!downloadApi.success || !downloadApi.result?.downloadUrl)
+                        return await reply("❌ Download link not found! Try another song.");
+
+                    const song = downloadApi.result;
+
+                    await conn.sendMessage(
+                        from,
+                        {
+                            audio: { url: song.downloadUrl },
+                            mimetype: "audio/mpeg",
+                            fileName: `${song.title}.mp3`,
+                            contextInfo: {
+                                externalAdReply: {
+                                    title: song.title,
+                                    body: song.artist,
+                                    thumbnailUrl: song.cover,
+                                    mediaType: 1,
+                                    renderLargerThumbnail: true,
+                                    sourceUrl: trackUrl,
+                                },
+                            },
+                        },
+                        { quoted: tMsg }
+                    );
+                } else if (tText.trim() === "0") {
+                    await conn.sendMessage(from, { text: "❌ Cancelled." }, { quoted: tMsg });
+                } else {
+                    await conn.sendMessage(from, { text: "❌ Invalid input. Reply 1 to download or 0 to cancel." }, { quoted: tMsg });
                 }
-            }
-        }, { quoted: mek })
+            };
 
-        // Send preview audio (if available)
-        if (song.preview_url) {
-            await conn.sendMessage(m.chat, {
-                audio: { url: song.preview_url },
-                mimetype: 'audio/mpeg',
-                ptt: false,
-                fileName: `${song.title}.mp3`
-            }, { quoted: mek })
-        } else {
-            await reply("🎧 *No preview available for this song!*")
-        }
+            conn.ev.on("messages.upsert", typeListener);
+        };
+
+        conn.ev.on("messages.upsert", listListener);
 
     } catch (e) {
-        console.log(e)
-        reply("⚠️ *Something went wrong while fetching Spotify song!* 😢\nPlease check your connection or API status.")
+        console.error(e);
+        await reply("*❌ Error:* " + e);
     }
-})
+});

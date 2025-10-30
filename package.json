@@ -9,7 +9,7 @@
     "restart": "pm2 restart WHITESHADOW-MD"
   },
 "dependencies": {
-    "@whiskeysockets/baileys": "npm:@rexxhayanasi/elaina-bail",
+    "@whiskeysockets/baileys": "npm:@dark-yasiya/baileys",
     "@adiwajshing/keyed-db": "latest",
     "@dark-yasiya/yt-dl.js": "1.0.5",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",

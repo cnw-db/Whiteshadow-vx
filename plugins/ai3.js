@@ -1,3 +1,10 @@
+//═══════════════════════════════════════════════//
+//                WHITESHADOW-MD                 //
+//═══════════════════════════════════════════════//
+//  ⚡ Command : AI Chat (with AI Badge)
+//  👑 Developer : Chamod Nimsara (WhiteShadow)
+//═══════════════════════════════════════════════//
+
 const { cmd } = require('../command');
 const axios = require('axios');
 
@@ -9,39 +16,25 @@ cmd({
   use: ".ai3 <question>",
   react: "🤖",
   filename: __filename
-}, async (client, m, { text }) => {
-  if (!text) {
-    await client.sendMessage(m.chat, {
-      text: "🧠 *Please enter a message to ask AI.*\nExample: .ai3 What is cyber security?",
-      ai: true
-    });
-    return;
-  }
-
-  // 🧠 React while processing
-  await m.react("🤖");
+}, async (m, { sock, text, reply }) => {
+  if (!text)
+    return reply("🧠 *Please enter a message to ask AI.*\nExample: .ai3 What is cyber security?");
 
   try {
-    const res = await axios.get(`https://whiteshadow-thz2.onrender.com/ai/gpt-5-mini?query=${encodeURIComponent(text)}`);
+    let res = await axios.get(`https://whiteshadow-thz2.onrender.com/ai/gpt-5-mini?query=${encodeURIComponent(text)}`);
 
     if (res.data && res.data.status && res.data.answer) {
-      await client.sendMessage(m.chat, {
-        text: `🤖 *WhiteShadow AI:*\n\n${res.data.answer}`,
-        ai: true
+      await sock.sendMessage(m.chat, {
+        text: res.data.answer,
+        ai: true // 🔥 This adds the “AI ✦” badge (if supported in your bot base)
       });
     } else {
-      console.log(res.data);
-      await client.sendMessage(m.chat, {
-        text: "⚠️ *AI response not received properly.*",
-        ai: true
-      });
+      console.error(res.data);
+      return reply("⚠️ AI response not received properly.");
     }
 
   } catch (err) {
     console.error(err);
-    await client.sendMessage(m.chat, {
-      text: "❌ *Error connecting to WHITESHADOW AI server.*",
-      ai: true
-    });
+    return reply("❌ *Error connecting to WHITESHADOW AI server.*");
   }
 });

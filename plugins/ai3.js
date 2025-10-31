@@ -1,7 +1,7 @@
 //═══════════════════════════════════════════════//
 //                WHITESHADOW-MD                 //
 //═══════════════════════════════════════════════//
-//  ⚡ Command : AI Chat (with AI Badge Support)
+//  ⚡ Command : AI Chat (with AI Badge)
 //  👑 Developer : Chamod Nimsara (WhiteShadow)
 //═══════════════════════════════════════════════//
 
@@ -16,29 +16,28 @@ cmd({
   use: ".ai3 <question>",
   react: "🤖",
   filename: __filename
-}, async (m, { sock, text }) => {
+}, async (m, sock) => {
+  const text = m.text?.split(' ').slice(1).join(' ');
+  
   if (!text) {
-    return await sock.sendMessage(m.chat, {
-      text: "🧠 *Please enter a message to ask AI.*\nExample: .ai3 What is cyber security?"
-    });
+    return await sock.reply(m.chat, "🧠 *Please enter a message to ask AI.*\nExample: .ai3 What is cyber security?", m);
   }
 
   try {
-    const res = await axios.get(`https://whiteshadow-thz2.onrender.com/ai/gpt-5-mini?query=${encodeURIComponent(text)}`, { timeout: 10000 });
-    const data = res.data;
+    const url = `https://whiteshadow-thz2.onrender.com/ai/gpt-5-mini?query=${encodeURIComponent(text)}`;
+    const { data } = await axios.get(url, { timeout: 10000 });
 
-    if (data && data.status && data.answer) {
+    if (data?.status && data?.answer) {
       await sock.sendMessage(m.chat, {
-        text: `🤖 *WhiteShadow AI:*\n\n${data.answer}`,
+        text: `🤖 *WhiteShadow AI:*\n\n${data.answer.trim() || "No reply from AI 🤔"}`,
         ai: true
-      });
+      }, { quoted: m });
     } else {
-      await sock.sendMessage(m.chat, { text: "⚠️ AI response not received properly." });
+      await sock.reply(m.chat, "⚠️ AI response not received properly.", m);
     }
-  } catch (err) {
-    console.log("❌ AI3 Error =>", err.message);
-    await sock.sendMessage(m.chat, {
-      text: "❌ *Error connecting to WHITESHADOW AI server.*\nCheck your internet or server link."
-    });
+
+  } catch (e) {
+    console.log("AI3 Error =>", e.message);
+    await sock.reply(m.chat, "❌ *Error connecting to WHITESHADOW AI server.*", m);
   }
 });

@@ -5,32 +5,39 @@
 //  👑 Developer : Chamod Nimsara (WhiteShadow)
 //═══════════════════════════════════════════════//
 
-const { cmd } = require('../command');
-const yts = require('yt-search');
-const axios = require('axios');
-const ffmpeg = require('fluent-ffmpeg');
-const fs = require('fs');
-const path = require('path');
+const config = require('../config')
+const fs = require('fs-extra')
+const path = require('path')
+const axios = require('axios')
+const ffmpeg = require('fluent-ffmpeg')
+const yts = require('yt-search')
+const { cmd } = require('../command')
 
-// 🔧 Channel & API Config (Set your own values here)
-global.idch = "120363397446799567@newsletter" // Channel ID
-global.yupraApi = "YOUR_API_KEY_HERE" // API key from https://ytdlpyton.nvlgroup.my.id/
+// 🔧 Configurable variables (can edit here)
+global.idch = "120363317972190466@newsletter" // Channel ID
+global.yupraApi = "YOUR_API_KEY_HERE" // API Key from ytdlpyton
 
 cmd({
   pattern: "playch",
   alias: ["ytch", "playchannel"],
+  use: ".playch <song name>",
   react: "🎧",
-  desc: "Plays and sends a YouTube song to your channel as voice note (PTT).",
+  desc: "Search and send YouTube song to Channel as Voice Note (PTT)",
   category: "music",
   filename: __filename
-}, async (client, m, text, { from, prefix, reply, isCreator }) => {
+},
+
+async (conn, mek, m, {
+  from, q, prefix, isOwner, reply
+}) => {
   try {
-    if (!isCreator) return reply("❌ Only the bot owner can use this command!");
-    if (!text) return reply(`📌 *Please enter a song name!*\n\nExample:\n${prefix}playch mellow koplo`);
+    if (!isOwner) return reply("❌ *Only the bot owner can use this command!*");
+    if (!q) return reply(`📌 *Please enter a song name!*\n\nExample:\n${prefix}playch calm down`);
 
-    await reply(`🔍 Searching for *${text}* on YouTube...`);
+    await reply(`🔍 Searching for *${q}* on YouTube...`);
 
-    const search = await yts(text);
+    // 🔎 Search song using yt-search
+    const search = await yts(q);
     const vid = search.videos && search.videos.length ? search.videos[0] : null;
     if (!vid) return reply('❌ No results found.');
 
@@ -44,6 +51,7 @@ cmd({
       'X-API-Key': global.yupraApi
     };
 
+    // 📥 Get meta and download link
     const metaRes = await axios.get(metaUrl, { headers });
     const meta = metaRes.data;
 
@@ -53,14 +61,17 @@ cmd({
 
     await reply(`🎧 *${vid.title}*\n📺 ${vid.author.name}\n\n⏳ Downloading and converting...`);
 
+    // Download MP3
     const audioRes = await axios.get(info.download_url, {
       responseType: 'arraybuffer',
       timeout: 120000
     });
     const buf = Buffer.from(audioRes.data);
 
+    // Function to sanitize file names
     const sanitize = s => s.replace(/[\\/:*?"<>|]/g, '').trim();
 
+    // 🌀 Convert MP3 to OGG
     const mp3ToOgg = async (buffer) => {
       const tmpIn = path.join(__dirname, `tmp_in_${Date.now()}.mp3`);
       const tmpOut = path.join(__dirname, `tmp_out_${Date.now()}.ogg`);
@@ -84,7 +95,8 @@ cmd({
     const safeTitle = sanitize(meta.title || vid.title);
     const filename = `${safeTitle}_128kbps.ogg`.slice(0, 160);
 
-    await client.sendMessage(global.idch, {
+    // 📨 Send song to Channel
+    await conn.sendMessage(global.idch, {
       audio: oggBuf,
       mimetype: 'audio/ogg; codecs=opus',
       ptt: true,
@@ -101,10 +113,10 @@ cmd({
       }
     });
 
-    await reply(`✅ Song *${vid.title}* successfully sent to your channel!`);
+    await reply(`✅ *${vid.title}* successfully sent to your channel!`);
 
-  } catch (err) {
-    console.error('[PLAYCH ERROR]', err);
-    await reply(`❌ Failed to play or send song.\n> ${err.message}`);
+  } catch (e) {
+    console.error('[PLAYCH ERROR]', e);
+    reply(`❌ *Error occurred while sending song:*\n${e.message}`);
   }
 });

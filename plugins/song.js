@@ -18,22 +18,22 @@ cmd({
     const res = await fetch(apiUrl);
     const data = await res.json();
 
-    // 🔹 Validate response
-    if (!data?.success || !data?.result?.downloadUrl) {
-      return reply("❌ Song not found or API error. Try again later.");
-    }
+    if (!data?.success || !data?.result?.downloadUrl)
+      return reply("❌ Song not found or API error. Please try again later.");
 
     const meta = data.result.metadata;
     const dlUrl = data.result.downloadUrl;
 
-    // 🔹 Try to fetch thumbnail
-    let buffer = null;
+    // 🔹 Thumbnail fetch (memory-safe)
+    let thumbBuffer = null;
     try {
       const thumbRes = await fetch(meta.cover);
-      buffer = Buffer.from(await thumbRes.arrayBuffer());
-    } catch {}
+      thumbBuffer = Buffer.from(await thumbRes.arrayBuffer());
+    } catch (e) {
+      console.log("Thumbnail fetch failed:", e);
+    }
 
-    // 🔹 Caption design
+    // 🔹 Caption
     const caption = `
 ╔═══════════════
 🎶 *Now Playing*
@@ -47,11 +47,15 @@ cmd({
 ╚═══════════════
 `;
 
-    // 🔹 Send thumbnail & details
-    await conn.sendMessage(from, {
-      image: buffer,
-      caption
-    }, { quoted: mek });
+    // 🔹 Send thumbnail & caption
+    if (thumbBuffer) {
+      await conn.sendMessage(from, {
+        image: thumbBuffer,
+        caption
+      }, { quoted: mek });
+    } else {
+      await conn.sendMessage(from, { text: caption }, { quoted: mek });
+    }
 
     // 🔹 Send audio
     await conn.sendMessage(from, {
@@ -62,6 +66,6 @@ cmd({
 
   } catch (err) {
     console.error("song cmd error:", err);
-    reply("⚠️ An error occurred while processing your request.");
+    reply("⚠️ An error occurred while processing your request. Please try again.");
   }
 });

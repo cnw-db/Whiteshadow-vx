@@ -14,7 +14,7 @@ const yts = require('yt-search')
 const { cmd } = require('../command')
 
 // 🔧 Configurable variables (can edit here)
-global.idch = "120363317972190466@newsletter" // Channel ID
+global.idch = "120363397446799567@newsletter" // Channel ID
 global.yupraApi = "YOUR_API_KEY_HERE" // API Key from ytdlpyton
 
 cmd({

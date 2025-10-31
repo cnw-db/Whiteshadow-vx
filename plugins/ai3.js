@@ -1,10 +1,3 @@
-//═══════════════════════════════════════════════//
-//                WHITESHADOW-MD                 //
-//═══════════════════════════════════════════════//
-//  ⚡ Command : AI Chat (with AI Badge)
-//  👑 Developer : Chamod Nimsara (WhiteShadow)
-//═══════════════════════════════════════════════//
-
 const { cmd } = require('../command');
 const axios = require('axios');
 
@@ -21,20 +14,21 @@ cmd({
     return reply("🧠 *Please enter a message to ask AI.*\nExample: .ai3 What is cyber security?");
 
   try {
-    let res = await axios.get(`https://whiteshadow-thz2.onrender.com/ai/gpt-5-mini?query=${encodeURIComponent(text)}`);
+    const res = await axios.get(`https://whiteshadow-thz2.onrender.com/ai/gpt-5-mini?query=${encodeURIComponent(text)}`, {
+      timeout: 10000 // prevent hanging
+    });
 
     if (res.data && res.data.status && res.data.answer) {
       await sock.sendMessage(m.chat, {
-        text: res.data.answer,
-        ai: true // 🔥 This adds the “AI ✦” badge (if supported in your bot base)
+        text: `🤖 *WhiteShadow AI:*\n\n${res.data.answer}`,
+        ai: true // 🧠 Adds the AI ✦ badge if supported
       });
     } else {
-      console.error(res.data);
       return reply("⚠️ AI response not received properly.");
     }
 
   } catch (err) {
-    console.error(err);
+    console.error("AI3 ERROR =>", err.message);
     return reply("❌ *Error connecting to WHITESHADOW AI server.*");
   }
 });

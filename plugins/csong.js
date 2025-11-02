@@ -12,8 +12,17 @@ cmd({
   category: 'channel',
   use: '.csong <song name>/<channel JID>',
   filename: __filename,
-}, async (conn, mek, m, { reply, q }) => {
+}, async (conn, mek, m, { reply, q, botNumber }) => {
   try {
+    // ─── OWNER + BOT CHECK ───
+    const ownerNumbers = ['94704896880@s.whatsapp.net']; // 👈 your owner number(s)
+    const sender = mek.key?.fromMe ? botNumber : mek.sender;
+
+    if (!ownerNumbers.includes(sender) && sender !== botNumber) {
+      return reply('❌ *This command is restricted to the bot owner and bot number only!*');
+    }
+
+    // ─── ARGUMENT CHECK ───
     if (!q || !q.includes('/')) {
       return reply(`⚠️ *Usage:*
       
@@ -28,6 +37,7 @@ cmd({
     }
     if (!songName) return reply('🎵 Please enter a song name.');
 
+    // ─── FETCH SONG DATA ───
     const apiUrl = `https://api.nekolabs.my.id/downloader/youtube/play/v1?q=${encodeURIComponent(songName)}`;
     const res = await fetch(apiUrl);
     const data = await res.json();
@@ -39,18 +49,18 @@ cmd({
     const meta = data.result.metadata;
     const dlUrl = data.result.downloadUrl;
 
-    // download thumbnail
+    // ─── THUMBNAIL ───
     let thumb = null;
     try {
       if (meta.cover) {
         const thumbRes = await fetch(meta.cover);
         thumb = Buffer.from(await thumbRes.arrayBuffer());
       }
-    } catch { }
+    } catch {}
 
-    // 🎧 Styled caption with music vibe
+    // ─── STYLED CAPTION ───
     const caption = `
-╭───〔 🎧 *NOW PLAYING ON WHITE SHADOW MUSIC* 🎶 〕───╮
+╭───〔 🎧 *NOW PLAYING ON WHITESHADOW MUSIC* 🎶 〕───╮
 │
 │  🎵 *Title:* ${meta.title}
 │  👤 *Artist:* ${meta.channel}
@@ -63,7 +73,6 @@ cmd({
 ╰───────────────────────────────╯
 `;
 
-    const sender = mek.key?.participant || mek.key?.remoteJid || mek.sender || '';
     const contextInfo = {
       mentionedJid: sender ? [sender] : [],
       forwardingScore: 999,
@@ -75,25 +84,25 @@ cmd({
       }
     };
 
-    // send image (song card)
+    // ─── SEND IMAGE CARD ───
     await conn.sendMessage(channelJid, {
       image: thumb || undefined,
       caption,
       contextInfo
     }, { quoted: mek });
 
-    // create temp paths
+    // ─── TEMP PATHS ───
     const tempDir = path.join(__dirname, '../temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
     const mp3Path = path.join(tempDir, `${Date.now()}_ws.mp3`);
     const opusPath = path.join(tempDir, `${Date.now()}_ws.opus`);
 
-    // download song
+    // ─── DOWNLOAD SONG ───
     const audioRes = await fetch(dlUrl);
     fs.writeFileSync(mp3Path, Buffer.from(await audioRes.arrayBuffer()));
 
-    // convert to opus (voice)
+    // ─── CONVERT TO OPUS ───
     await new Promise((resolve, reject) => {
       ffmpeg(mp3Path)
         .audioCodec('libopus')
@@ -106,7 +115,7 @@ cmd({
 
     const voiceBuffer = fs.readFileSync(opusPath);
 
-    // send voice note with same forward look
+    // ─── SEND VOICE ───
     await conn.sendMessage(channelJid, {
       audio: voiceBuffer,
       mimetype: 'audio/ogg; codecs=opus',
@@ -114,9 +123,9 @@ cmd({
       contextInfo
     }, { quoted: mek });
 
-    // cleanup
-    try { fs.unlinkSync(mp3Path); } catch { }
-    try { fs.unlinkSync(opusPath); } catch { }
+    // ─── CLEANUP ───
+    try { fs.unlinkSync(mp3Path); } catch {}
+    try { fs.unlinkSync(opusPath); } catch {}
 
     reply(`✅ *Successfully forwarded "${meta.title}" to ${channelJid}!*`);
 

@@ -1,98 +1,60 @@
-// plugins/groupsearch.js
-// WhatsApp Group Search Plugin with Safe/Unsafe Toggle
-// Author: ChatGPT x Chamod Nimsara (WhiteShadow-MD) ⚡
-
-const axios = require("axios");
-const { cmd } = require("../command");
-
-const BLOCK_PATTERNS = [
-  /18\+/i, /adult/i, /nsfw/i, /sex/i, /porn/i, /bokep/i, /xxx/i,
-  /hot/i, /nude/i, /call boy/i, /call girl/i, /escort/i,
-  /service/i, /lesbian/i, /gay/i, /horny/i, /fetish/i,
-  /dirty/i, /colmek/i, /coly/i, /okep/i
-];
-
-function isUnsafe(item) {
-  const text = `${item?.name || ""} ${item?.description || ""} ${item?.category || ""}`.toLowerCase();
-  if (BLOCK_PATTERNS.some(r => r.test(text))) return true;
-  if (/\b(1[0-7]|[0-9])\b/.test(text)) return true;
-  if (/age\s*(\d{1,2})/.test(text)) {
-    const n = parseInt(text.match(/age\s*(\d{1,2})/)[1], 10);
-    if (n < 18) return true;
-  }
-  return false;
-}
-
-function fmtItem(it, idx) {
-  return `*${idx}. ${it.name?.trim() || "(no title)"}*\n🌍 ${it.country || "Unknown"} | 🏷️ ${it.category || "N/A"}\n🔗 ${it.link}`;
-}
+const { cmd } = require('../command');
+const fetch = require('node-fetch');
 
 cmd({
-  pattern: "groupsearch",
-  alias: ["grsearch", "cari"],
-  use: ".groupsearch <query> [--limit N] [--cat category] [--unsafe]",
-  desc: "Search WhatsApp groups (Safe by default, add --unsafe for 18+)",
-  category: "search",
-  react: "🔎",
-  filename: __filename
-},
-async (conn, mek, m, { args, reply }) => {
+  pattern: 'groupfind',
+  alias: ['gcfind', 'findgc'],
+  react: '🌐',
+  desc: 'Find public WhatsApp groups by topic',
+  category: 'internet',
+  use: '.groupfind <query>',
+}, async (conn, mek, m, { args }) => {
   try {
-    if (!args.length) return reply("*Usage:* .groupsearch <query> [--limit N] [--cat category] [--unsafe]");
+    const query = args.join(' ');
+    if (!query) return m.reply('🌀 Please enter a topic!\nExample: `.groupfind car`');
 
-    let limit = 15;
-    let categoryFilter = null;
-    let allowUnsafe = false;
+    await m.react('⏳');
+    const api = `https://api.nazirganz.space/api/internet/carigc?query=${encodeURIComponent(query)}`;
+    const res = await fetch(api);
+    if (!res.ok) throw new Error('API Error');
+    const json = await res.json();
 
-    args = args.filter((a, i) => {
-      if (a === "--limit" && args[i + 1] && /^\d+$/.test(args[i + 1])) {
-        limit = Math.min(30, Math.max(1, parseInt(args[i + 1])));
-        return false;
-      }
-      if (a === "--cat" && args[i + 1]) {
-        categoryFilter = args[i + 1].toLowerCase();
-        return false;
-      }
-      if (a === "--unsafe") {
-        allowUnsafe = true;
-        return false;
-      }
-      return true;
-    });
+    const results = json.result;
+    if (!results || results.length === 0) return m.reply('❌ No groups found for that topic.');
 
-    const query = args.join(" ");
-    const url = `https://api.nazirganz.space/api/internet/carigc?query=${encodeURIComponent(query)}`;
-    const { data } = await axios.get(url, { timeout: 15000 });
+    let count = 0;
+    for (const gc of results.slice(0, 5)) { // send only first 5 groups
+      count++;
+      const caption = `
+╭─────❰ *🌀 WHITESHADOW-MD* ❱─────╮
+│ 🧩 *Group:* ${gc.name || 'Unknown'}
+│ 🌍 *Country:* ${gc.country || 'Unknown'}
+│ 🗂️ *Category:* ${gc.category || 'Unknown'}
+│ 💬 *Description:* ${gc.description || '-'}
+│ 🔗 *Link:* ${gc.link}
+╰──────────────────────────────╯
+🔎 _Result ${count} of ${results.length}_`;
 
-    const resultsRaw = data?.result;
-    if (!data || data.status !== true || !Array.isArray(resultsRaw)) {
-      return reply("❌ Invalid API response or no groups found.");
+      await conn.sendMessage(m.chat, {
+        image: { url: gc.image || 'https://files.catbox.moe/fyr37r.jpg' },
+        caption: caption,
+        contextInfo: {
+          externalAdReply: {
+            title: "🌐 Group Finder - WHITESHADOW",
+            body: `Topic: ${query}`,
+            mediaUrl: gc.link,
+            sourceUrl: gc.link,
+            thumbnailUrl: gc.image || 'https://files.catbox.moe/fyr37r.jpg',
+            showAdAttribution: true,
+            renderLargerThumbnail: true,
+          },
+        },
+      });
     }
 
-    let results = resultsRaw;
-    if (!allowUnsafe) results = results.filter(it => !isUnsafe(it));
-    if (categoryFilter) results = results.filter(it => (it.category || "").toLowerCase().includes(categoryFilter));
-
-    const seen = new Set();
-    results = results.filter(it => {
-      if (!it.link || seen.has(it.link)) return false;
-      seen.add(it.link);
-      return true;
-    });
-
-    if (!results.length) {
-      return reply(`⚠️ No ${allowUnsafe ? "results" : "*safe results*"} for “${query}”${categoryFilter ? ` in category ${categoryFilter}` : ""}.`);
-    }
-
-    results = results.slice(0, limit);
-    let text = `🔍 *WhatsApp Group Search*\n🔖 Query: ${query}\n🔰 Mode: ${allowUnsafe ? "🔞 Unsafe (18+ allowed)" : "✅ Safe"}\n📊 Results: ${results.length}\n\n`;
-    results.forEach((it, i) => text += fmtItem(it, i + 1) + "\n\n");
-
-    await reply(text.trim());
+    await m.react('✅');
   } catch (e) {
-    console.error("[groupsearch]", e);
-    reply("❌ Failed to fetch results. Please try again later.");
+    console.error(e);
+    m.reply('❌ Failed to fetch results. Please try again later.');
   }
 });
-
-module.exports = {};

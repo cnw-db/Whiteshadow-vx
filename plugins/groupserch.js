@@ -61,7 +61,7 @@ async (conn, mek, m, { args, reply }) => {
     });
 
     const query = args.join(" ");
-    const url = `https://api.nazirganz.space/api/internet/carigc?query=${encodeURIComponent(query)}`;
+    const url = `https://api.nazirganz.space/api/internet/carigc?query={encodeURIComponent(query)}`;
     const { data } = await axios.get(url, { timeout: 15000 });
 
     // Handle both "data.data" and "data.result"

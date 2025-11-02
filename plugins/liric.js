@@ -1,50 +1,48 @@
-//WHITESHADOW-MD// 
-
 const { cmd } = require('../command');
 const fetch = require('node-fetch');
 
 cmd({
   pattern: 'lyrics',
-  alias: ['liric', 'lyric', 'ly'],
-  desc: 'Search and display song lyrics 🎵',
-  react: '🎶',
+  alias: ['lyric', 'songlyrics', 'lirik'],
+  react: '🎵',
+  desc: 'Find Sinhala song lyrics by title',
   category: 'music',
-  use: '.lyrics <song name>',
-  filename: __filename
-}, async (conn, msg, args, { from, reply }) => {
+  use: '.lyrics <song name>'
+}, async (conn, mek, m, { text }) => {
+  if (!text) return m.reply('🎧 *Please provide a song name!*\n\nExample: `.lyrics Kamini smokio`');
+
   try {
-    const query = args.join(' ');
-    if (!query) return reply('🎧 *Please enter a song name!*\n\nExample: `.lyrics Kamini Smokio`');
+    const api = `https://api.zenzxz.my.id/api/tools/lirik?title=${encodeURIComponent(text)}`;
+    const res = await fetch(api);
+    const json = await res.json();
 
-    await conn.sendMessage(from, { react: { text: '🔍', key: msg.key } });
-
-    const res = await fetch(`https://api.zenzxz.my.id/api/tools/lirik?title=${encodeURIComponent(query)}`);
-    const data = await res.json();
-
-    if (!data.success || !data.data?.result || data.data.result.length === 0) {
-      return reply('❌ Lyrics not found. Try another song!');
+    if (!json.success || !json.data || json.data.count === 0) {
+      return m.reply('❌ Lyrics not found. Try another song name!');
     }
 
-    const song = data.data.result[0];
-    const title = song.trackName || 'Unknown Title';
+    const song = json.data.result[0];
+    const title = song.trackName || song.name || text;
     const artist = song.artistName || 'Unknown Artist';
-    const lyrics = song.plainLyrics || 'Lyrics not available.';
+    const album = song.albumName || 'Unknown Album';
+    const lyrics = song.plainLyrics ? song.plainLyrics.trim() : 'No lyrics found 😢';
 
     const caption = `
-🎵 *${title}*
-👤 Artist: ${artist}
+╔══ 🎶 *Song Lyrics* ══╗
+🎵 *Title:* ${title}
+👤 *Artist:* ${artist}
+💿 *Album:* ${album}
+⏱️ *Duration:* ${song.duration ? `${song.duration}s` : 'N/A'}
+╚══════════════════════╝
 
-─────────────────────
+📝 *Lyrics:*
 ${lyrics}
-─────────────────────
 
-© 2025 WhiteShadow-MD 🎧
+_© 2025 • WhiteShadow-MD™_
 `;
 
-    await conn.sendMessage(from, { text: caption }, { quoted: msg });
-
+    await conn.sendMessage(m.chat, { text: caption }, { quoted: mek });
   } catch (err) {
     console.error(err);
-    reply('❌ Error fetching lyrics. Please try again later.');
+    m.reply('⚠️ Error fetching lyrics! Try again later.');
   }
 });

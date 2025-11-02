@@ -1,6 +1,6 @@
 // plugins/groupsearch.js
 // WhatsApp Group Search Plugin with Safe/Unsafe Toggle
-// Author: ChatGPT with chamod nimsara  (for WhiteShadow-MD) don't copy ⚠ 
+// Author: ChatGPT x Chamod Nimsara (WhiteShadow-MD) ⚡
 
 const axios = require("axios");
 const { cmd } = require("../command");
@@ -31,7 +31,7 @@ cmd({
   pattern: "groupsearch",
   alias: ["grsearch", "cari"],
   use: ".groupsearch <query> [--limit N] [--cat category] [--unsafe]",
-  desc: "Search WhatsApp groups (Safe by default, add --unsafe to allow 18+)",
+  desc: "Search WhatsApp groups (Safe by default, add --unsafe for 18+)",
   category: "search",
   react: "🔎",
   filename: __filename
@@ -61,13 +61,12 @@ async (conn, mek, m, { args, reply }) => {
     });
 
     const query = args.join(" ");
-    const url = `https://api.nazirganz.space/api/internet/carigc?query={encodeURIComponent(query)}`;
+    const url = `https://api.nazirganz.space/api/internet/carigc?query=${encodeURIComponent(query)}`;
     const { data } = await axios.get(url, { timeout: 15000 });
 
-    // Handle both "data.data" and "data.result"
-    const resultsRaw = data?.data || data?.result;
+    const resultsRaw = data?.result;
     if (!data || data.status !== true || !Array.isArray(resultsRaw)) {
-      return reply("❌ Invalid API response.");
+      return reply("❌ Invalid API response or no groups found.");
     }
 
     let results = resultsRaw;
@@ -82,7 +81,7 @@ async (conn, mek, m, { args, reply }) => {
     });
 
     if (!results.length) {
-      return reply(`⚠️ No ${allowUnsafe ? "results" : "*safe* results*"} for “${query}”${categoryFilter ? ` in category ${categoryFilter}` : ""}.`);
+      return reply(`⚠️ No ${allowUnsafe ? "results" : "*safe results*"} for “${query}”${categoryFilter ? ` in category ${categoryFilter}` : ""}.`);
     }
 
     results = results.slice(0, limit);
@@ -92,7 +91,7 @@ async (conn, mek, m, { args, reply }) => {
     await reply(text.trim());
   } catch (e) {
     console.error("[groupsearch]", e);
-    reply("❌ Failed to fetch results. Try again later.");
+    reply("❌ Failed to fetch results. Please try again later.");
   }
 });
 

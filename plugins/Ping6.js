@@ -1,88 +1,151 @@
-const { cmd } = require('../command');
-const crypto = require('crypto');
-const { generateWAMessage, generateWAMessageFromContent, delay } = require('@whiskeysockets/baileys');
+const { cmd } = require("../command");
+const fetch = require("node-fetch");
+const fs = require("fs");
+const path = require("path");
+const ffmpeg = require("fluent-ffmpeg");
 
-/**
- * Album Message Sender Function
- */
-async function albumMessage(sock, jid, medias, options = {}) {
-  if (typeof jid !== 'string') throw new TypeError('jid must be a string');
-
-  for (const media of medias) {
-    if (!['image', 'video'].includes(media.type))
-      throw new TypeError(`Invalid media type: ${media.type}`);
-    if (!media.data || (!media.data.url && !Buffer.isBuffer(media.data)))
-      throw new TypeError(`Invalid media data: ${media.data}`);
+// Fake vCard (for channel quoted look)
+const fakevCard = {
+  key: {
+    fromMe: false,
+    participant: "0@s.whatsapp.net",
+    remoteJid: "status@broadcast"
+  },
+  message: {
+    contactMessage: {
+      displayName: "© WhiteShadow-MD",
+      vcard: `BEGIN:VCARD
+VERSION:3.0
+FN:White Shadow
+ORG:WhiteShadow;
+TEL;type=CELL;type=VOICE;waid=94704896880:+94704896880
+END:VCARD`
+    }
   }
+};
 
-  if (medias.length < 2) throw new RangeError('Minimum 2 media required');
-
-  const caption = options.text || options.caption || '';
-  const sendDelay = !isNaN(options.delay) ? options.delay : 500;
-
-  const album = generateWAMessageFromContent(jid, {
-    messageContextInfo: { messageSecret: new Uint8Array(crypto.randomBytes(32)) },
-    albumMessage: {
-      expectedImageCount: medias.filter(m => m.type === 'image').length,
-      expectedVideoCount: medias.filter(m => m.type === 'video').length,
-      ...(options.quoted
-        ? {
-            contextInfo: {
-              remoteJid: options.quoted.key.remoteJid,
-              fromMe: options.quoted.key.fromMe,
-              stanzaId: options.quoted.key.id,
-              participant: options.quoted.key.participant || options.quoted.key.remoteJid,
-              quotedMessage: options.quoted.message,
-            },
-          }
-        : {}),
-    },
-  }, {});
-
-  await sock.relayMessage(album.key.remoteJid, album.message, { messageId: album.key.id });
-
-  for (let i = 0; i < medias.length; i++) {
-    const { type, data } = medias[i];
-    const msg = await generateWAMessage(album.key.remoteJid, {
-      [type]: data,
-      ...(i === 0 ? { caption } : {}),
-    }, { upload: sock.waUploadToServer });
-
-    msg.message.messageContextInfo = {
-      messageSecret: new Uint8Array(crypto.randomBytes(32)),
-      messageAssociation: { associationType: 1, parentMessageKey: album.key },
-    };
-
-    await sock.relayMessage(msg.key.remoteJid, msg.message, { messageId: msg.key.id });
-    await delay(sendDelay);
-  }
-
-  return album;
-}
-
-/**
- * Command: .album
- */
 cmd({
-  pattern: "album",
-  desc: "Send multiple photos/videos as an album message",
-  category: "media",
-  react: "📸",
-  use: ".album <caption>",
-}, async (m, sock) => {
+  pattern: "playch",
+  alias: ["chplay", "chsong"],
+  react: "🎵",
+  desc: "Send YouTube song (voice + details) directly to WhatsApp Channel",
+  category: "channel",
+  use: ".playch <song name>/<channel JID>",
+  filename: __filename,
+}, async (conn, mek, m, { reply, q }) => {
   try {
-    const caption = m.text || "✨ WHITESHADOW Album ✨";
+    if (!q || !q.includes("/")) {
+      return reply(
+        "⚠️ Usage:\n.playch <song>/<channel JID>\n\n📌 Example:\n.playch Shape of You/1203630xxxxx@newsletter"
+      );
+    }
 
-    // ✅ Chamod's Catbox Album
-    const medias = [
-      { type: "image", data: { url: "https://files.catbox.moe/ncoqaz.jpg" } },
-      { type: "image", data: { url: "https://files.catbox.moe/401n5c.jpg" } },
-      { type: "image", data: { url: "https://files.catbox.moe/4m8iw2.jpg" } },
-    ];
+    const [songName, channelJid] = q.split("/").map(x => x.trim());
+    if (!channelJid.endsWith("@newsletter"))
+      return reply("❌ Invalid Channel ID! Must end with @newsletter");
 
-    await albumMessage(sock, m.chat, medias, { caption, quoted: m });
+    if (!songName) return reply("🎧 Please enter the song name to search.");
 
-  } catch (e) {
-    await m.reply(`❌ *Album Send Error:*\n${e.message}`);
+    await reply(`🔍 Searching for *${songName}* on YouTube...`);
+
+    // ─── Nekolabs API ───────────────────────────────
+    const apiUrl = `https://api.nekolabs.my.id/downloader/youtube/play/v1?q=${encodeURIComponent(songName)}`;
+    const res = await fetch(apiUrl);
+    const data = await res.json();
+
+    if (!data?.success || !data?.result?.downloadUrl)
+      return reply("❌ Failed to find the song or API returned an error.");
+
+    const meta = data.result.metadata;
+    const dlUrl = data.result.downloadUrl;
+
+    // ─── Thumbnail ───────────────────────────────
+    let thumb;
+    try {
+      const thumbRes = await fetch(meta.cover);
+      thumb = Buffer.from(await thumbRes.arrayBuffer());
+    } catch {
+      thumb = null;
+    }
+
+    // ─── Caption (Stylish Music Channel Look) ───────────────────────────────
+    const caption = `
+🎶 *Now Playing on WhiteShadow Music Channel* 🎶
+
+🎧 *Title:* ${meta.title}
+📀 *Artist:* ${meta.channel}
+⏱️ *Duration:* ${meta.duration}
+🔗 *Watch on YouTube:* ${meta.url}
+
+💬 “Feel the rhythm, embrace the vibe.”  
+🔥 Exclusive drop powered by *WhiteShadow-MD* ⚡
+`.trim();
+
+    // ─── Send Thumbnail & Caption ───────────────────────────────
+    await conn.sendMessage(
+      channelJid,
+      {
+        image: thumb,
+        caption: caption
+      },
+      { quoted: fakevCard }
+    );
+
+    // ─── Create temp folder ───────────────────────────────
+    const tempDir = path.join(__dirname, "../temp");
+    if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+    const mp3Path = path.join(tempDir, `${Date.now()}.mp3`);
+    const opusPath = path.join(tempDir, `${Date.now()}.opus`);
+
+    // ─── Download song ───────────────────────────────
+    const audioRes = await fetch(dlUrl);
+    const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+    fs.writeFileSync(mp3Path, audioBuffer);
+
+    // ─── Convert MP3 → Opus (PTT) ───────────────────────────────
+    await new Promise((resolve, reject) => {
+      ffmpeg(mp3Path)
+        .audioCodec("libopus")
+        .format("opus")
+        .audioBitrate("64k")
+        .save(opusPath)
+        .on("end", resolve)
+        .on("error", reject);
+    });
+
+    const voiceBuffer = fs.readFileSync(opusPath);
+
+    // ─── Send Voice Note (PTT) ───────────────────────────────
+    await conn.sendMessage(
+      channelJid,
+      {
+        audio: voiceBuffer,
+        mimetype: "audio/ogg; codecs=opus",
+        ptt: true,
+        contextInfo: {
+          externalAdReply: {
+            title: meta.title,
+            body: `${meta.channel} • WhiteShadow Music`,
+            thumbnailUrl: meta.cover,
+            sourceUrl: meta.url,
+            mediaType: 1,
+            renderLargerThumbnail: true,
+            showAdAttribution: true
+          }
+        }
+      },
+      { quoted: fakevCard }
+    );
+
+    // ─── Cleanup ───────────────────────────────
+    fs.unlinkSync(mp3Path);
+    fs.unlinkSync(opusPath);
+
+    reply(`✅ *Successfully uploaded* 🎵 ${meta.title} *to channel!*`);
+
+  } catch (err) {
+    console.error("playch error:", err);
+    reply("⚠️ Error while sending song to channel.");
   }
 });

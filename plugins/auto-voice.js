@@ -1,13 +1,16 @@
 const axios = require("axios");
+const fs = require("fs");
+const path = require("path");
 const ffmpeg = require("fluent-ffmpeg");
-const { PassThrough } = require("stream");
-const { cmd } = require("../command");
 const config = require("../config");
+const { cmd } = require("../command");
 
 cmd({ on: "body" }, async (conn, m, msg, { from, body }) => {
   try {
     if (config.AUTO_VOICE !== "true") return;
-    const res = await axios.get("https://raw.githubusercontent.com/chamod-mv/Whiteshadow-data/refs/heads/main/autovoice.json");
+
+    const jsonUrl = "https://raw.githubusercontent.com/chamod-mv/Whiteshadow-data/refs/heads/main/autovoice.json";
+    const res = await axios.get(jsonUrl);
     const voiceMap = res.data;
     const text = body.toLowerCase();
 
@@ -15,29 +18,39 @@ cmd({ on: "body" }, async (conn, m, msg, { from, body }) => {
       if (text === keyword.toLowerCase()) {
         const audioUrl = voiceMap[keyword];
 
-        const response = await axios.get(audioUrl, { responseType: "stream" });
-        const outputStream = new PassThrough();
+        const tempDir = path.join(__dirname, "../temp");
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+
+        const mp3Path = path.join(tempDir, `${Date.now()}.mp3`);
+        const opusPath = path.join(tempDir, `${Date.now()}.opus`);
+
+        // ─── DOWNLOAD AUDIO ───
+        const response = await axios.get(audioUrl, { responseType: "arraybuffer" });
+        fs.writeFileSync(mp3Path, Buffer.from(response.data));
 
         await new Promise((resolve, reject) => {
-          ffmpeg(response.data)
+          ffmpeg(mp3Path)
             .audioCodec("libopus")
             .format("opus")
             .audioBitrate("64k")
-            .pipe(outputStream)
-            .on("finish", resolve)
+            .save(opusPath)
+            .on("end", resolve)
             .on("error", reject);
         });
 
-        const chunks = [];
-        for await (const chunk of outputStream) chunks.push(chunk);
-        const voiceBuffer = Buffer.concat(chunks);
+        const voiceBuffer = fs.readFileSync(opusPath);
 
+        // ─── SEND VOICE ───
         await conn.sendPresenceUpdate("recording", from);
         await conn.sendMessage(from, {
           audio: voiceBuffer,
           mimetype: "audio/ogg; codecs=opus",
           ptt: true
         }, { quoted: m });
+
+        // ─── CLEANUP ───
+        try { fs.unlinkSync(mp3Path); } catch {}
+        try { fs.unlinkSync(opusPath); } catch {}
 
         break;
       }

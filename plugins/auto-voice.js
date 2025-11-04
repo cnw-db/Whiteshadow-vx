@@ -1,6 +1,8 @@
-const axios = require('axios');
-const config = require("../config");
+const axios = require("axios");
+const ffmpeg = require("fluent-ffmpeg");
+const { PassThrough } = require("stream");
 const { cmd } = require("../command");
+const config = require("../config");
 
 cmd({ on: "body" }, async (conn, m, msg, { from, body }) => {
   try {
@@ -13,21 +15,27 @@ cmd({ on: "body" }, async (conn, m, msg, { from, body }) => {
       if (text === keyword.toLowerCase()) {
         const audioUrl = voiceMap[keyword];
 
-        // Download file as buffer
-        const response = await axios.get(audioUrl, { responseType: "arraybuffer" });
-        const audioBuffer = Buffer.from(response.data);
+        const response = await axios.get(audioUrl, { responseType: "stream" });
+        const outputStream = new PassThrough();
 
-        // Detect MIME type
-        let mime = "audio/mpeg";
-        if (audioUrl.endsWith(".m4a")) mime = "audio/mp4";
-        else if (audioUrl.endsWith(".ogg")) mime = "audio/ogg";
+        await new Promise((resolve, reject) => {
+          ffmpeg(response.data)
+            .audioCodec("libopus")
+            .format("opus")
+            .audioBitrate("64k")
+            .pipe(outputStream)
+            .on("finish", resolve)
+            .on("error", reject);
+        });
+
+        const chunks = [];
+        for await (const chunk of outputStream) chunks.push(chunk);
+        const voiceBuffer = Buffer.concat(chunks);
 
         await conn.sendPresenceUpdate("recording", from);
-
-        // ✅ send with quoted + force PTT (WhatsApp compatible)
         await conn.sendMessage(from, {
-          audio: audioBuffer,
-          mimetype: mime,
+          audio: voiceBuffer,
+          mimetype: "audio/ogg; codecs=opus",
           ptt: true
         }, { quoted: m });
 

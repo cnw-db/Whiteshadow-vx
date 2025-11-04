@@ -1,76 +1,72 @@
 const { cmd } = require('../command');
 
-// Meta AI number
+// Meta AI bot number
 const metaNumber = '13135550002@s.whatsapp.net';
 
-// Mode state memory
+// Mode memory
 let metaMode = false;
 
-// 🟢 Function to check mode status (exported)
+// Function to check status
 function isMetaOn() {
   return metaMode;
 }
 
-// ⚙️ Command: .meta on / .meta off
+// Main command
 cmd({
   pattern: "meta",
-  desc: "Enable or disable Meta AI Auto Chat mode",
-  react: "🤖",
+  desc: "Talk with Meta AI or toggle AI mode",
   category: "ai",
-  use: ".meta on / .meta off",
+  react: "🤖",
+  use: ".meta [on/off/question]",
 }, async (m, sock, { text }) => {
-  if (!text) {
-    return await sock.sendMessage(m.chat, {
-      text: `⚙️ *Meta AI Mode:* ${metaMode ? "✅ ON" : "❌ OFF"}\n\n_Use:_ *.meta on* or *.meta off*`,
-    }, { quoted: m });
-  }
-
-  if (text.toLowerCase() === "on") {
-    metaMode = true;
-    await sock.sendMessage(m.chat, { text: "🤖 Meta AI Mode Activated!" }, { quoted: m });
-  } else if (text.toLowerCase() === "off") {
-    metaMode = false;
-    await sock.sendMessage(m.chat, { text: "🛑 Meta AI Mode Deactivated!" }, { quoted: m });
-  } else {
-    await sock.sendMessage(m.chat, { text: "❗ Invalid usage.\nUse: *.meta on* or *.meta off*" }, { quoted: m });
-  }
-});
-
-// ⚡ Auto-forward system
-cmd({
-  pattern: "meta-auto",
-  desc: "Auto forward user messages to Meta AI (if enabled)",
-  dontAddCommandList: true, // hidden command
-}, async (m, sock) => {
   try {
-    const msg = m;
-    if (!msg.message) return;
-
-    const userText = msg.message.conversation || msg.message?.extendedTextMessage?.text;
-    if (!userText) return;
-
-    // Only forward when mode is ON
-    if (isMetaOn() && msg.key.remoteJid !== metaNumber && !msg.key.fromMe) {
-      await sock.sendMessage(metaNumber, { text: userText });
-
-      sock.ev.on('messages.upsert', async (metaResp) => {
-        try {
-          const metaMsg = metaResp.messages[0];
-          if (metaMsg.key.remoteJid === metaNumber && !metaMsg.key.fromMe) {
-            const metaReply = metaMsg.message?.conversation || metaMsg.message?.extendedTextMessage?.text;
-            if (metaReply) {
-              await sock.sendMessage(msg.key.remoteJid, {
-                text: `🤖 *Meta AI:* ${metaReply}`,
-              }, { quoted: msg });
-            }
-          }
-        } catch (err) {
-          console.log('Meta AI reply error:', err);
-        }
-      });
+    // 1️⃣ No text → show help/status
+    if (!text) {
+      return await sock.sendMessage(m.chat, {
+        text: `⚙️ *Meta AI Mode:* ${metaMode ? "✅ ON" : "❌ OFF"}\n\n🧠 *Usage:*\n.meta on → Activate Meta AI\n.meta off → Deactivate Meta AI\n.meta <question> → Ask Meta AI`,
+      }, { quoted: m });
     }
+
+    const lower = text.toLowerCase();
+
+    // 2️⃣ Turn mode on/off
+    if (lower === "on") {
+      metaMode = true;
+      return await sock.sendMessage(m.chat, { text: "✅ *Meta AI Mode Activated!*" }, { quoted: m });
+    }
+    if (lower === "off") {
+      metaMode = false;
+      return await sock.sendMessage(m.chat, { text: "🛑 *Meta AI Mode Deactivated!*" }, { quoted: m });
+    }
+
+    // 3️⃣ Ask question directly
+    const question = text.trim();
+    if (!question) return;
+
+    // Send question to Meta AI number
+    await sock.sendMessage(metaNumber, { text: question });
+
+    // Wait for Meta AI reply
+    sock.ev.on('messages.upsert', async (resp) => {
+      try {
+        const metaMsg = resp.messages[0];
+        if (
+          metaMsg.key.remoteJid === metaNumber &&
+          !metaMsg.key.fromMe &&
+          (metaMsg.message?.conversation || metaMsg.message?.extendedTextMessage?.text)
+        ) {
+          const metaReply = metaMsg.message.conversation || metaMsg.message.extendedTextMessage.text;
+          await sock.sendMessage(m.chat, {
+            text: `🤖 *Meta AI:* ${metaReply}`,
+          }, { quoted: m });
+        }
+      } catch (err) {
+        console.error("Meta AI reply error:", err);
+      }
+    });
+
   } catch (err) {
-    console.log('Meta Auto error:', err);
+    console.error("Meta Command Error:", err);
   }
 });
 

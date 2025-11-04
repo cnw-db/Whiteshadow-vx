@@ -4,41 +4,38 @@ const { cmd } = require("../command");
 
 cmd({ on: "body" }, async (conn, m, msg, { from, body }) => {
   try {
-    const jsonUrl = "https://raw.githubusercontent.com/chamod-mv/Whiteshadow-data/refs/heads/main/autovoice.json";
-    const res = await axios.get(jsonUrl);
+    if (config.AUTO_VOICE !== "true") return;
+    const res = await axios.get("https://raw.githubusercontent.com/chamod-mv/Whiteshadow-data/refs/heads/main/autovoice.json");
     const voiceMap = res.data;
-
     const text = body.toLowerCase();
-    if (config.AUTO_VOICE !== "true") return; // AutoVoice off නම් stop
 
     for (const keyword in voiceMap) {
       if (text === keyword.toLowerCase()) {
         const audioUrl = voiceMap[keyword];
 
-        // Valid format check
-        if (!audioUrl.endsWith(".mp3") && !audioUrl.endsWith(".m4a")) {
-          return conn.sendMessage(from, { text: "❌ Invalid audio format (.mp3 / .m4a only)" }, { quoted: m });
-        }
+        // Download file as buffer
+        const response = await axios.get(audioUrl, { responseType: "arraybuffer" });
+        const audioBuffer = Buffer.from(response.data);
+
+        // Detect MIME type
+        let mime = "audio/mpeg";
+        if (audioUrl.endsWith(".m4a")) mime = "audio/mp4";
+        else if (audioUrl.endsWith(".ogg")) mime = "audio/ogg";
 
         await conn.sendPresenceUpdate("recording", from);
 
-        // Detect MIME type dynamically
-        const mimeType = audioUrl.endsWith(".m4a") ? "audio/mp4" : "audio/mpeg";
-
-        // Use buffer instead of direct URL (WhatsApp prefers file buffer)
-        const audioBuffer = (await axios.get(audioUrl, { responseType: "arraybuffer" })).data;
-
+        // ✅ send with quoted + force PTT (WhatsApp compatible)
         await conn.sendMessage(from, {
           audio: audioBuffer,
-          mimetype: mimeType,
+          mimetype: mime,
           ptt: true
         }, { quoted: m });
 
-        break; // stop loop after match
+        break;
       }
     }
   } catch (e) {
     console.error("AutoVoice error:", e);
-    return conn.sendMessage(from, { text: "⚠️ Error fetching voice: " + e.message }, { quoted: m });
+    return conn.sendMessage(from, { text: "⚠️ Error: " + e.message }, { quoted: m });
   }
 });

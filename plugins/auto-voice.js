@@ -1,62 +1,40 @@
-const axios = require("axios");
-const fs = require("fs");
-const path = require("path");
-const ffmpeg = require("fluent-ffmpeg");
+const axios = require('axios');
 const config = require("../config");
 const { cmd } = require("../command");
 
-cmd({ on: "body" }, async (conn, m, msg, { from, body }) => {
+cmd({ on: "body" }, async (conn, m, msg, { from, body, isOwner }) => {
   try {
-    if (config.AUTO_VOICE !== "true") return;
-
     const jsonUrl = "https://raw.githubusercontent.com/chamod-mv/Whiteshadow-data/refs/heads/main/autovoice.json";
     const res = await axios.get(jsonUrl);
     const voiceMap = res.data;
-    const text = body.toLowerCase();
 
     for (const keyword in voiceMap) {
-      if (text === keyword.toLowerCase()) {
-        const audioUrl = voiceMap[keyword];
+      if (body.toLowerCase() === keyword.toLowerCase()) {
+        if (config.AUTO_VOICE === "true") {
 
-        const tempDir = path.join(__dirname, "../temp");
-        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
+          // OPTIONAL: Skip owner messages
+          if (isOwner) return;
 
-        const mp3Path = path.join(tempDir, `${Date.now()}.mp3`);
-        const opusPath = path.join(tempDir, `${Date.now()}.opus`);
+          const audioUrl = voiceMap[keyword];
+          if (!audioUrl.endsWith(".mp3") && !audioUrl.endsWith(".m4a")) {
+            return conn.sendMessage(from, { text: "Invalid audio format. Only .mp3 or .m4a supported." }, { quoted: m });
+          }
 
-        // ─── DOWNLOAD AUDIO ───
-        const response = await axios.get(audioUrl, { responseType: "arraybuffer" });
-        fs.writeFileSync(mp3Path, Buffer.from(response.data));
-
-        await new Promise((resolve, reject) => {
-          ffmpeg(mp3Path)
-            .audioCodec("libopus")
-            .format("opus")
-            .audioBitrate("64k")
-            .save(opusPath)
-            .on("end", resolve)
-            .on("error", reject);
-        });
-
-        const voiceBuffer = fs.readFileSync(opusPath);
-
-        // ─── SEND VOICE ───
-        await conn.sendPresenceUpdate("recording", from);
-        await conn.sendMessage(from, {
-          audio: voiceBuffer,
-          mimetype: "audio/ogg; codecs=opus",
-          ptt: true
-        }, { quoted: m });
-
-        // ─── CLEANUP ───
-        try { fs.unlinkSync(mp3Path); } catch {}
-        try { fs.unlinkSync(opusPath); } catch {}
-
-        break;
+          await conn.sendPresenceUpdate("recording", from);
+          await conn.sendMessage(
+            from,
+            {
+              audio: { url: audioUrl },
+              mimetype: "audio/mp4", // use mp4 type, better for m4a/mp3 both
+              ptt: true
+            },
+            { quoted: m }
+          );
+        }
       }
     }
   } catch (e) {
     console.error("AutoVoice error:", e);
-    return conn.sendMessage(from, { text: "⚠️ Error: " + e.message }, { quoted: m });
+    return conn.sendMessage(from, { text: "Error fetching voice: " + e.message }, { quoted: m });
   }
 });

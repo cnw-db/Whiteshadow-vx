@@ -1,64 +1,62 @@
-const fs = require('fs');
-const https = require('https');
-const path = require('path');
+const { cmd } = require('../command');
+const { generateWAMessageFromContent, generateWAMessageContent, proto } = require('@whiskeysockets/baileys');
 
 cmd({
-    pattern: "pingx",
-    alias: ["speedy", "pongz"],
-    use: ".ping",
-    desc: "Ping command with sticker image",
-    category: "main",
-    react: "⚡",
+    pattern: "catalog",
+    alias: ["shop"],
+    desc: "Send WhatsApp Business catalog button",
+    category: "fun",
+    react: "🛍️",
     filename: __filename
-}, async (conn, mek, m, { from, sender, pushname, reply }) => {
+},
+async (sock, m, mdata) => {
     try {
-        const start = Date.now();
+        const msg = await generateWAMessageFromContent(m.chat, {
+            viewOnceMessage: {
+                message: {
+                    interactiveMessage: {
+                        body: { text: "🛒 *Welcome to WhiteShadow Catalog!*" },
+                        header: {
+                            title: "👑 WhiteShadow Store",
+                            hasMediaAttachment: true,
+                            productMessage: {
+                                product: {
+                                    productImage: await (async () => {
+                                        const { imageMessage } = await generateWAMessageContent(
+                                            { image: { url: "https://files.catbox.moe/fyr37r.jpg" } }, // image URL
+                                            { upload: sock.waUploadToServer }
+                                        );
+                                        return imageMessage;
+                                    })(),
+                                    productId: "9116471035103640",
+                                    title: "WhiteShadow TikTok Boost Pack",
+                                    description: "🔥 Get followers, likes & views instantly!",
+                                    currencyCode: "LKR",
+                                    priceAmount1000: "100000",
+                                    retailerId: "4144242",
+                                    url: "https://wa.me/c/94704896880",
+                                    productImageCount: 1
+                                },
+                                businessOwnerJid: "94704896880@s.whatsapp.net"
+                            }
+                        },
+                        nativeFlowMessage: {
+                            buttons: [
+                                {
+                                    name: "cta_catalog",
+                                    buttonParamsJson: `{"business_phone_number": "94704896880", "catalog_product_id": "9116471035103640"}`
+                                }
+                            ]
+                        }
+                    }
+                }
+            }
+        }, { quoted: m });
 
-        // React with random emoji
-        const emojis = ['🔥','⚡','🚀','💨','🎯','🎉','🌟','💥','🕐','🔹'];
-        const randomEmoji = emojis[Math.floor(Math.random()*emojis.length)];
-        await conn.sendMessage(from, { react: { text: randomEmoji, key: mek.key } });
-
-        const ping = Date.now() - start;
-
-        let badge = '🐢 Slow', color = '🔴';
-        if (ping <= 150) { badge = '🚀 Super Fast'; color = '🟢'; }
-        else if (ping <= 300) { badge = '⚡ Fast'; color = '🟡'; }
-        else if (ping <= 600) { badge = '⚠️ Medium'; color = '🟠'; }
-
-        // Download the WebP sticker from the URL
-        const url = 'https://files.catbox.moe/732gct.webp';
-        const stickerPath = path.join(__dirname, 'temp_sticker.webp');
-
-        // Simple download logic
-        await new Promise((resolve, reject) => {
-            const file = fs.createWriteStream(stickerPath);
-            https.get(url, (response) => {
-                response.pipe(file);
-                file.on('finish', () => {
-                    file.close(resolve);
-                });
-            }).on('error', (err) => {
-                fs.unlink(stickerPath, ()=>{});
-                reject(err);
-            });
-        });
-
-        const stickerBuffer = fs.readFileSync(stickerPath);
-
-        // Send sticker
-        const sentSticker = await conn.sendMessage(from, { sticker: stickerBuffer }, { quoted: mek });
-
-        // Send ping info as text (quote sticker)
-        await conn.sendMessage(from, {
-            text: `> *WHITESHADOW‑MD ʀᴇsᴘᴏɴsᴇ: ${ping} ms ${randomEmoji}*\n> *sᴛᴀᴛᴜs: ${color} ${badge}*`
-        }, { quoted: sentSticker });
-
-        // (Optional) Delete temp sticker file
-        fs.unlinkSync(stickerPath);
+        await sock.relayMessage(m.chat, msg.message, { messageId: msg.key.id });
 
     } catch (e) {
-        console.error("❌ Error in ping command:", e);
-        reply(`⚠️ Error: ${e.message}`);
+        console.error(e);
+        await m.reply("⚠️ Error sending catalog button!");
     }
 });

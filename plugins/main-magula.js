@@ -1,6 +1,11 @@
 const { cmd } = require('../command')
 const axios = require('axios')
 const NodeCache = require('node-cache')
+const path = require('path')
+const {
+  generateWAMessageContent,
+  generateWAMessageFromContent
+} = require('@whiskeysockets/baileys')
 
 const movieCache = new NodeCache({ stdTTL: 120, checkperiod: 150 })
 
@@ -100,18 +105,22 @@ cmd({
 
         await conn.sendMessage(from, { react: { text: '📦', key: msg.key } })
 
-        // Send as document (WhiteShadow style)
-        await conn.sendMessage(
-          from,
-          {
-            document: { url: chosen.link },
-            mimetype: 'video/mp4',
-            fileName: `${selected.title} - ${chosen.quality}.mp4`,
-            caption:
-              `🎥 *${selected.title}*\n📺 ${chosen.quality}\n💾 ${chosen.size}\n━━━━━━━━━━━━━━━━━━\n⚡ WhiteShadow-MD`
-          },
-          { quoted: msg }
-        )
+        // Detect file extension + mimetype
+        let fileExt = path.extname(chosen.link).split('.').pop().toLowerCase()
+        if (!fileExt) fileExt = 'mp4'
+        const mimeType = fileExt === 'mkv' ? 'video/x-matroska' : 'video/mp4'
+
+        // Use generateWAMessageContent to send as document
+        const msgContent = await generateWAMessageContent({
+          document: { url: chosen.link },
+          mimetype: mimeType,
+          fileName: `${selected.title} - ${chosen.quality}.${fileExt}`,
+          caption:
+            `🎥 *${selected.title}*\n📺 ${chosen.quality}\n💾 ${chosen.size}\n━━━━━━━━━━━━━━━━━━\n⚡ WhiteShadow-MD`
+        }, { upload: conn.waUploadToServer })
+
+        const msgNode = generateWAMessageFromContent(from, msgContent, { quoted: msg })
+        await conn.relayMessage(from, msgNode.message, { messageId: msgNode.key.id })
       }
     }
 

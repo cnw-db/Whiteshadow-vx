@@ -1,119 +1,125 @@
-//═══════════════════════════════════════════════//
-//                WHITESHADOW-MD                 //
-//═══════════════════════════════════════════════//
-//  ⚡ Command : .cz / .czinfo / .czdl
-//  🎬 Feature : CineSubz Sinhala Subtitle Movie Downloader
-//  👑 Developer : Chamod Nimsara (WhiteShadow)
-//  📡 API Source : asitha.top (foreign-marna-sithaunarathnapromax)
-//═══════════════════════════════════════════════//
+const { cmd } = require('../command')
+const axios = require('axios')
+const NodeCache = require('node-cache')
 
-const { cmd } = require('../command');
-const fetch = require('node-fetch');
+const movieCache = new NodeCache({ stdTTL: 120, checkperiod: 150 })
 
-//────────────── Search Movies ──────────────//
 cmd({
-  pattern: "cz",
-  alias: ["cinesubz", "sinhalasub", "moviecz"],
-  react: "🎬",
-  desc: "Search Sinhala Subtitle Movies & Download via CineSubz API",
-  category: "movies",
-  use: ".cz <movie name>",
+  pattern: 'cinesubz',
+  alias: ['cs'],
+  desc: 'Search Sinhala Subbed Movies from CineSubz',
+  category: 'movie',
+  react: '🎬',
   filename: __filename
-},
-async (conn, mek, m, { from, args, reply }) => {
+}, async (conn, mek, m, { from, q }) => {
+
+  if (!q) {
+    return await conn.sendMessage(from, {
+      text: `🎬 *CINESUBZ MOVIE SEARCH*\n\n📖 Usage:\n\`\`\`.cinesubz <movie name>\`\`\`\nEg: .cinesubz avengers\n━━━━━━━━━━━━━━━━━━\n⚡ Powered by WhiteShadow-MD`
+    }, { quoted: mek })
+  }
+
   try {
-    if (!args || !args[0]) return reply("🕵️‍♂️ *Please enter a movie name to search!*\n📘 Example: .cz new");
+    const cacheKey = `cinesubz_${q.toLowerCase()}`
+    let data = movieCache.get(cacheKey)
 
-    const query = args.join(" ");
-    const searchUrl = `https://foreign-marna-sithaunarathnapromax-9a005c2e.koyeb.app/api/cinesubz/search?q=${encodeURIComponent(query)}&apiKey=d3d7e61cc85c2d70974972ff6d56edfac42932d394f7551207d2f6ca707eda56`;
+    if (!data) {
+      const url = `https://darkyasiya-new-movie-api.vercel.app/api/movie/cinesubz/search?q=${encodeURIComponent(q)}`
+      const res = await axios.get(url)
+      data = res.data
+      if (!data.success || !data.data.all || data.data.all.length === 0)
+        throw new Error('No Sinhala Subbed Movies Found!')
+      movieCache.set(cacheKey, data)
+    }
 
-    const res = await fetch(searchUrl);
-    const data = await res.json();
+    const movieList = data.data.all.map((m, i) => ({
+      number: i + 1,
+      title: m.title,
+      year: m.year,
+      imdb: m.imdb,
+      type: m.type,
+      image: m.image,
+      link: m.link
+    }))
 
-    if (!data || !data.data || data.data.length === 0)
-      return reply("❌ No results found for your search.");
+    let listText = `🔍 *CineSubz Sinhala Subbed Movies*\n━━━━━━━━━━━━━━━━━━\n`
+    for (const m of movieList)
+      listText += `🔸 *${m.number}. ${m.title}*\n🎭 ${m.type} | ⭐ ${m.imdb} | 📅 ${m.year}\n`
 
-    let msg = `🎬 *CineSubz Sinhala Subtitle Movies* 🎥\n\n🔍 Results for: *${query}*\n───────────────────\n`;
+    listText += `\n💬 Reply with the *movie number* to continue.\n━━━━━━━━━━━━━━━━━━\n⚡ WhiteShadow-MD`
 
-    data.data.slice(0, 10).forEach((movie, i) => {
-      msg += `📍 *${i + 1}.* ${movie.title}\n📅 Year: ${movie.year || "Unknown"}\n⭐ ${movie.rating || "N/A"}\n🎞️ Type: ${movie.type}\n🔗 ${movie.link}\n\n`;
-    });
+    const sentMsg = await conn.sendMessage(from, { text: listText }, { quoted: mek })
+    const movieMap = new Map()
 
-    msg += `───────────────────\n💡 *Use:* .czinfo <movie link>\nTo get movie details and download link.\n\n⚡ Powered by WhiteShadow-MD`;
+    const listener = async (update) => {
+      const msg = update.messages?.[0]
+      if (!msg?.message?.extendedTextMessage) return
+      const replyText = msg.message.extendedTextMessage.text.trim()
+      const repliedId = msg.message.extendedTextMessage.contextInfo?.stanzaId
 
-    await conn.sendMessage(from, { text: msg }, { quoted: mek });
+      // Select Movie
+      if (repliedId === sentMsg.key.id) {
+        const num = parseInt(replyText)
+        const selected = movieList.find(m => m.number === num)
+        if (!selected)
+          return conn.sendMessage(from, { text: `❌ Invalid Number. Please reply correctly.` }, { quoted: msg })
+
+        await conn.sendMessage(from, { react: { text: '🎯', key: msg.key } })
+
+        const movieApi = `https://darkyasiya-new-movie-api.vercel.app/api/movie/cinesubz/movie?url=${encodeURIComponent(selected.link)}`
+        const movieRes = await axios.get(movieApi)
+        const movie = movieRes.data.data
+        const downloads = movie.downloadUrl || []
+
+        if (downloads.length === 0)
+          return conn.sendMessage(from, { text: `⚠️ No download links found for this movie.` }, { quoted: msg })
+
+        let dlText = `🎬 *${movie.title}*\n⭐ IMDB: ${movie.imdb.value}\n━━━━━━━━━━━━━━━━━━\n`
+        downloads.forEach((d, i) => { dlText += `📥 *${i + 1}. ${d.quality}* — ${d.size}\n` })
+        dlText += `\n💬 Reply with the *quality number* to download.`
+
+        const downloadMsg = await conn.sendMessage(
+          from,
+          {
+            image: { url: movie.mainImage || selected.image },
+            caption: dlText + `\n━━━━━━━━━━━━━━━━━━\n⚡ WhiteShadow-MD`
+          },
+          { quoted: msg }
+        )
+        movieMap.set(downloadMsg.key.id, { selected, downloads })
+      }
+
+      // Select Quality
+      else if (movieMap.has(repliedId)) {
+        const { selected, downloads } = movieMap.get(repliedId)
+        const num = parseInt(replyText)
+        const chosen = downloads[num - 1]
+
+        if (!chosen)
+          return conn.sendMessage(from, { text: `❌ Invalid quality number.` }, { quoted: msg })
+
+        await conn.sendMessage(from, { react: { text: '📦', key: msg.key } })
+
+        // Send as document (WhiteShadow style)
+        await conn.sendMessage(
+          from,
+          {
+            document: { url: chosen.link },
+            mimetype: 'video/mp4',
+            fileName: `${selected.title} - ${chosen.quality}.mp4`,
+            caption:
+              `🎥 *${selected.title}*\n📺 ${chosen.quality}\n💾 ${chosen.size}\n━━━━━━━━━━━━━━━━━━\n⚡ WhiteShadow-MD`
+          },
+          { quoted: msg }
+        )
+      }
+    }
+
+    conn.ev.on('messages.upsert', listener)
 
   } catch (e) {
-    console.error(e);
-    reply("⚠️ Error fetching CineSubz results!");
+    return conn.sendMessage(from, {
+      text: `❌ *Error*\n\n${e.message}\n━━━━━━━━━━━━━━━━━━\n⚡ WhiteShadow-MD`
+    }, { quoted: mek })
   }
-});
-
-//────────────── Movie Info & Download Link ──────────────//
-cmd({
-  pattern: "czinfo",
-  alias: ["czdetail", "czmovie"],
-  react: "📄",
-  desc: "Get full movie details + download link",
-  category: "movies",
-  use: ".czinfo <CineSubz Movie URL>",
-  filename: __filename
-},
-async (conn, mek, m, { from, args, reply }) => {
-  try {
-    if (!args[0]) return reply("📎 *Please provide a CineSubz movie link!*\nExample: .czinfo https://cinesubz.net/movies/the-other-2025-sinhala-subtitles/");
-
-    const movieUrl = encodeURIComponent(args[0]);
-    const detailUrl = `https://foreign-marna-sithaunarathnapromax-9a005c2e.koyeb.app/api/cinesubz/movie-details?url=${movieUrl}&apiKey=d3d7e61cc85c2d70974972ff6d56edfac42932d394f7551207d2f6ca707eda56`;
-
-    const response = await fetch(detailUrl);
-    const data = await response.json();
-    const d = data.mainDetails;
-    const mov = data.moviedata;
-
-    let caption = `🎬 *${d.maintitle}*\n\n⭐ *IMDb:* ${d.rating?.value || "N/A"} (${d.rating?.count || "?"} votes)\n🎭 *Genres:* ${d.genres?.join(", ") || "Unknown"}\n🕓 *Runtime:* ${d.runtime || "Unknown"}\n🌍 *Country:* ${d.country || "Unknown"}\n📅 *Released:* ${d.dateCreated}\n🎥 *Director:* ${mov.director || "Unknown"}\n\n📝 *Description:*\n${mov.description.trim() || "No description"}\n\n🔗 *Watch Page:*\n${data.dilinks?.link}\n\n💾 *Use:* .czdl <episode/movie link>\nTo get direct download link.\n\n⚡ Powered by WhiteShadow-MD`;
-
-    await conn.sendMessage(from, {
-      image: { url: d.imageUrl },
-      caption: caption
-    }, { quoted: mek });
-
-  } catch (err) {
-    console.error(err);
-    reply("⚠️ Error fetching movie details!");
-  }
-});
-
-//────────────── Direct Download (No Temp) ──────────────//
-cmd({
-  pattern: "czdl",
-  alias: ["czdownload"],
-  react: "⬇️",
-  desc: "Send CineSubz movie directly as WhatsApp document (no temp download)",
-  category: "movies",
-  use: ".czdl <episode/movie link>",
-  filename: __filename
-},
-async (conn, mek, m, { from, args, reply }) => {
-  try {
-    if (!args[0]) return reply("🎞️ Please provide a valid *episode/movie link!*");
-
-    const url = encodeURIComponent(args[0]);
-    const apiUrl = `https://foreign-marna-sithaunarathnapromax-9a005c2e.koyeb.app/api/cinesubz/downloadurl?url=${url}&apiKey=d3d7e61cc85c2d70974972ff6d56edfac42932d394f7551207d2f6ca707eda56`;
-
-    const res = await fetch(apiUrl);
-    const json = await res.json();
-
-    if (!json.url) return reply("❌ Download link not found.");
-
-    await conn.sendMessage(from, {
-      document: { url: json.url },
-      mimetype: "video/mp4",
-      fileName: `WhiteShadow_${json.quality}.mp4`
-    }, { quoted: mek });
-
-  } catch (e) {
-    console.error(e);
-    reply("⚠️ Failed to send movie document!");
-  }
-});
+})

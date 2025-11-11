@@ -1,71 +1,87 @@
 const { cmd } = require('../command');
-const axios = require('axios');
+const { fetchJson } = require('../lib/functions');
+
+const fakevCard = {
+    key: { fromMe: false, participant: "0@s.whatsapp.net", remoteJid: "status@broadcast" },
+    message: {
+        contactMessage: {
+            displayName: "© WhiteShadow-MD",
+            vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:WhiteShadow-MD\nTEL;type=CELL;type=VOICE;waid=94704896880:+94704896880\nEND:VCARD`
+        }
+    }
+};
 
 cmd({
-  pattern: 'fb2',
-  desc: 'Download Facebook video with number reply',
-  category: 'downloader',
-  react: '🎬',
-  async exec(socket, msg, args) {
+    pattern: "facebook2",
+    react: "🎥",
+    alias: ["fbb", "fbvideo2", "fb2"],
+    desc: "Download videos from Facebook with number reply",
+    category: "download",
+    use: ".facebook <facebook_url>",
+    filename: __filename
+}, async (conn, mek, m, { from, q, reply }) => {
+    if (!q) return reply("🚩 Please provide a valid Facebook URL 🐼");
+
     try {
-      if (!args[0]) return await socket.sendMessage(msg.key.remoteJid, { text: 'Please provide Facebook video link!' }, { quoted: msg });
+        // 🟢 Fetch JSON from API
+        const fb = await fetchJson(`https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`);
+        if (!fb.status || !fb.result?.downloads?.length) return reply("❌ Couldn't find video for this link.");
 
-      const fbUrl = args[0];
-      const res = await axios.get(`https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(fbUrl)}`);
-      const data = res.data;
+        const thumb = fb.result.thumbnail;
+        const downloads = fb.result.downloads;
 
-      if (!data?.result?.downloads?.length) {
-        return await socket.sendMessage(msg.key.remoteJid, { text: '💔 Failed to fetch video. Try another link.' }, { quoted: msg });
-      }
+        let caption = `🎥 *WHITESHADOW-MD FACEBOOK DOWNLOADER* 🎥\n\n📝 *Title:* Facebook Video\n🔗 *URL:* ${q}\n\n💬 *Reply with your choice:*`;
 
-      const downloads = data.result.downloads;
-      let listText = 'Choose video quality by replying with number:\n\n';
-      downloads.forEach((d, i) => {
-        listText += `${i + 1}. ${d.quality}\n`;
-      });
+        downloads.forEach((d, i) => {
+            caption += `\n${i + 1}️⃣ ${d.quality}`;
+        });
 
-      await socket.sendMessage(msg.key.remoteJid, { text: listText }, { quoted: msg });
+        caption += `\n\n© Powered by WhiteShadow-MD 🌛`;
 
-      // Save in cache for number reply
-      socket.fbVideoCache = socket.fbVideoCache || new Map();
-      socket.fbVideoCache.set(msg.key.id, downloads);
+        // Send thumbnail + caption first
+        const sentMsg = await conn.sendMessage(from, {
+            image: { url: thumb },
+            caption: caption
+        }, { quoted: fakevCard });
+
+        const messageID = sentMsg.key.id;
+
+        // Listen for user reply
+        const handler = async (msgUpdate) => {
+            try {
+                const mekInfo = msgUpdate?.messages?.[0];
+                if (!mekInfo?.message) return;
+
+                const userText = mekInfo?.message?.conversation || mekInfo?.message?.extendedTextMessage?.text;
+                const isReply = mekInfo?.message?.extendedTextMessage?.contextInfo?.stanzaId === messageID;
+                if (!isReply) return;
+
+                const choice = parseInt(userText.trim());
+                if (!choice || choice < 1 || choice > downloads.length) return reply("❌ Invalid choice! Please reply with a valid number.");
+
+                await conn.sendMessage(from, { react: { text: "⬇️", key: mekInfo.key } });
+
+                const selected = downloads[choice - 1];
+                await conn.sendMessage(from, {
+                    video: { url: selected.url },
+                    mimetype: "video/mp4",
+                    caption: `*${selected.quality}*`
+                }, { quoted: m });
+
+                await conn.sendMessage(from, { react: { text: "✅", key: mekInfo.key } });
+
+                // Remove listener after use
+                conn.ev.off("messages.upsert", handler);
+            } catch (err) {
+                console.error("Reply handler error:", err);
+                reply("⚠️ Error while processing your reply.");
+            }
+        };
+
+        conn.ev.on("messages.upsert", handler);
 
     } catch (err) {
-      console.log(err);
-      await socket.sendMessage(msg.key.remoteJid, { text: '❌ Error occurred while fetching video.' }, { quoted: msg });
+        console.error(err);
+        reply("💔 Failed to download the video. Please try again later 🐼");
     }
-  }
-});
-
-// Handle number reply
-cmd({
-  pattern: /^\d+$/,
-  fromMe: false,
-  async exec(socket, msg) {
-    try {
-      const id = msg.message.extendedTextMessage?.contextInfo?.stanzaId;
-      if (!id) return;
-
-      const downloads = socket.fbVideoCache?.get(id);
-      if (!downloads) return; // no cached video
-
-      const num = parseInt(msg.text);
-      if (!num || num < 1 || num > downloads.length) {
-        return await socket.sendMessage(msg.key.remoteJid, { text: '❌ Invalid number. Try again.' }, { quoted: msg });
-      }
-
-      const chosen = downloads[num - 1];
-
-      await socket.sendMessage(msg.key.remoteJid, {
-        video: { url: chosen.url },
-        caption: `🎬 Sending video: ${chosen.quality}`
-      }, { quoted: msg });
-
-      socket.fbVideoCache.delete(id); // clear cache
-
-    } catch (err) {
-      console.log(err);
-      await socket.sendMessage(msg.key.remoteJid, { text: '❌ Error sending video.' }, { quoted: msg });
-    }
-  }
 });

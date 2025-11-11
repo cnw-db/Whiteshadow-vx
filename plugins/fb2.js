@@ -1,108 +1,78 @@
-const axios = require("axios");
-const { cmd } = require("../command");
+const { cmd } = require('../command');
+const axios = require('axios');
+const { 
+    prepareWAMessageMedia, 
+    generateWAMessageFromContent, 
+    generateWAMessageContent 
+} = require('@whiskeysockets/baileys');
 
 cmd({
-  pattern: "facebook2",
-  alias: ["fb2", "fbv", "fbdown", "fbdl"],
-  react: "🎥",
-  desc: "Download Facebook videos - WhiteShadow-MD",
-  category: "download",
-  use: ".facebook <url>",
-  filename: __filename
-},
-async (conn, mek, m, { from, q, reply, sleep }) => {
-  try {
-    if (!q) return reply("🚩 *Please provide a valid Facebook video link!*");
+    pattern: 'fb2',
+    desc: 'Download Facebook video from a link',
+    category: 'downloader',
+    react: '📥',
+    async exec(socket, msg, args) {
+        const from = msg.key.remoteJid;
+        const reply = msg.message?.conversation || args.join(' ');
 
-    const res = await axios.get(`https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`);
-    const data = res.data?.result;
+        if (!reply) return socket.sendMessage(from, { text: '❌ Please provide a Facebook video link.' }, { quoted: msg });
 
-    if (!data || !data.downloads?.length)
-      return reply("❌ *Couldn't find downloadable links. Try another link!*");
+        try {
+            // Fetch JSON from API
+            const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(reply)}`;
+            const { data } = await axios.get(apiUrl);
 
-    const qualityList = data.downloads.map((v, i) => `*${i + 1}.* ${v.quality}`).join("\n");
+            if (!data.status || !data.result) {
+                return socket.sendMessage(from, { text: '💔 Failed to fetch video. Please try again.' }, { quoted: msg });
+            }
 
-    const caption = `⚡ *WHITESHADOW-MD — FACEBOOK DOWNLOADER* ⚡
+            const { thumbnail, downloads } = data.result;
 
-🎬 *Video Detected!*
-Choose your desired quality 👇
+            // Build interactive reply
+            let text = `💻 *Facebook Video Found!*\nChoose the quality to download by replying with number:\n\n`;
+            downloads.forEach((d, i) => {
+                text += `*${i + 1}.* ${d.quality}\n`;
+            });
 
-${qualityList}
+            // Send thumbnail + options
+            const media = await prepareWAMessageMedia({ image: { url: thumbnail } }, { upload: socket.waUploadToServer });
+            const content = generateWAMessageFromContent(from, generateWAMessageContent({
+                imageMessage: media.imageMessage,
+                caption: text
+            }), { quoted: msg });
+            await socket.relayMessage(from, content.message, { messageId: content.key.id });
 
-📌 *Reply with the number (1, 2, 3...)* to download.`;
+            // Store the downloads temporarily for this user
+            socket.fbDownloads = socket.fbDownloads || {};
+            socket.fbDownloads[from] = downloads;
 
-    // Send main message
-    const sentMsg = await conn.sendMessage(from, {
-      image: { url: data.thumbnail },
-      caption: caption,
-      contextInfo: {
-        externalAdReply: {
-          title: "Facebook Downloader",
-          body: "WhiteShadow-MD | Powered by Chamod",
-          thumbnailUrl: data.thumbnail,
-          mediaType: 1,
-          sourceUrl: q
+        } catch (e) {
+            console.log(e);
+            return socket.sendMessage(from, { text: '💔 Failed to download Facebook video. Please try again later!' }, { quoted: msg });
         }
-      }
-    }, { quoted: mek });
+    }
+});
 
-    // 🕐 Wait for reply (up to 60 seconds)
-    const waitForReply = async () => {
-      return new Promise((resolve) => {
-        const listener = async (msgUpdate) => {
-          try {
-            const msg = msgUpdate?.messages?.[0];
-            if (!msg?.message) return;
+// Reply handler
+cmd({
+    pattern: /^[1-9]$/,
+    category: 'downloader',
+    async exec(socket, msg) {
+        const from = msg.key.remoteJid;
+        const reply = msg.message.conversation.trim();
 
-            const userText =
-              msg.message.conversation ||
-              msg.message.extendedTextMessage?.text;
+        if (!socket.fbDownloads || !socket.fbDownloads[from]) return;
+        const downloads = socket.fbDownloads[from];
 
-            const contextId =
-              msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
+        const index = parseInt(reply) - 1;
+        if (index < 0 || index >= downloads.length) return;
 
-            // Only accept replies to our message
-            if (contextId !== sentMsg.key.id) return;
+        const chosen = downloads[index];
 
-            conn.ev.off("messages.upsert", listener); // remove listener after one match
-            resolve(userText.trim());
-          } catch {
-            resolve(null);
-          }
-        };
-        conn.ev.on("messages.upsert", listener);
+        // Send selected video
+        await socket.sendMessage(from, { video: { url: chosen.url }, caption: `🎬 Downloading: ${chosen.quality}` });
 
-        // Timeout after 60s
-        setTimeout(() => {
-          conn.ev.off("messages.upsert", listener);
-          resolve(null);
-        }, 60000);
-      });
-    };
-
-    const choice = await waitForReply();
-
-    if (!choice) return reply("⏰ *Time out!* Please send the command again.");
-    const index = parseInt(choice);
-
-    if (isNaN(index) || index < 1 || index > data.downloads.length)
-      return reply("❌ *Invalid number!* Reply with a valid option.");
-
-    const selected = data.downloads[index - 1];
-
-    await conn.sendMessage(from, { react: { text: "⬇️", key: mek.key } });
-
-    await conn.sendMessage(from, {
-      video: { url: selected.url },
-      mimetype: "video/mp4",
-      caption: `🎥 *${selected.quality} Video* | WhiteShadow-MD`
-      // document: true // <- uncomment to send as document
-    }, { quoted: mek });
-
-    await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
-
-  } catch (err) {
-    console.error(err);
-    reply("💔 *Failed to download Facebook video. Please try again later!*");
-  }
+        // Clear temporary storage
+        delete socket.fbDownloads[from];
+    }
 });

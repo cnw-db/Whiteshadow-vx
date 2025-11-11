@@ -1,84 +1,96 @@
 const { cmd } = require('../command');
-const { fetchJson } = require('../lib/functions');
+const axios = require('axios');
 
 const fakevCard = {
-    key: { fromMe: false, participant: "0@s.whatsapp.net", remoteJid: "status@broadcast" },
-    message: {
-        contactMessage: {
-            displayName: "© WhiteShadow-MD",
-            vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:WhiteShadow-MD\nTEL;type=CELL;type=VOICE;waid=94704896880:+94704896880\nEND:VCARD`
-        }
-    }
+  key: { fromMe: false, participant: "0@s.whatsapp.net", remoteJid: "status@broadcast" },
+  message: { contactMessage: { displayName: "© WhiteShadow", vcard: `BEGIN:VCARD\nVERSION:3.0\nFN:WhiteShadow\nTEL;type=CELL;waid=94704896880:+94704896880\nEND:VCARD` } }
 };
 
 cmd({
-    pattern: "facebook2",
-    react: "🎥",
-    alias: ["fbb2", "fbvideo", "fb2"],
-    desc: "Download Facebook videos via number reply",
-    category: "download",
-    use: ".facebook <facebook_url>",
-    filename: __filename
+  pattern: "facebook2",
+  react: "🎥",
+  alias: ["fbb2","fbvideo2","fb2"],
+  desc: "Download videos from Facebook",
+  category: "download",
+  use: ".facebook <url>",
+  filename: __filename
 }, async (conn, mek, m, { from, q, reply }) => {
-    if (!q) return reply("🚩 Please provide a valid Facebook URL 🐼");
+  try {
+    if (!q) return reply("🚩 Please provide a Facebook URL 🐼");
 
-    try {
-        const fb = await fetchJson(`https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`);
-        if (!fb.status || !fb.result?.downloads?.length) return reply("❌ Couldn't find video for this link.");
+    const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;
+    const res = await axios.get(apiUrl);
+    const json = res.data;
 
-        const thumb = fb.result.thumbnail;
-        const downloads = fb.result.downloads;
+    if (!json.status || !json.result || !json.result.downloads) 
+      return reply("❌ No video found or invalid URL.");
 
-        let caption = `🎥 *WHITESHADOW-MD FACEBOOK DOWNLOADER* 🎥\n\n📝 *Title:* Facebook Video\n🔗 *URL:* ${q}\n\n💬 *Reply with your choice:*`;
-        downloads.forEach((d, i) => caption += `\n${i + 1}️⃣ ${d.quality}`);
-        caption += `\n\n© Powered by WhiteShadow-MD 🌛`;
+    const thumb = json.result.thumbnail;
+    const downloads = json.result.downloads;
 
-        const sentMsg = await conn.sendMessage(from, {
-            image: { url: thumb },
-            caption
-        }, { quoted: fakevCard });
+    // Prepare caption with choices
+    let caption = `🎥 *WHITESHADOW-MD FACEBOOK DOWNLOADER* 🎥\n\n`;
+    caption += `📝 *URL:* ${q}\n\n`;
+    caption += `💬 Reply with your choice:\n`;
+    downloads.forEach((d, i) => {
+      caption += `${i+1}️⃣ ${d.quality}\n`;
+    });
+    caption += `\n© Powered by WhiteShadow-MD`;
 
-        const messageID = sentMsg.key.id;
+    // Send thumbnail + caption
+    const sentMsg = await conn.sendMessage(from, {
+      image: { url: thumb },
+      caption: caption
+    }, { quoted: fakevCard });
 
-        // ❌ Remove any previous listener for this message
-        const listener = async (msgUpdate) => {
-            try {
-                const mekInfo = msgUpdate?.messages?.[0];
-                if (!mekInfo?.message) return;
+    const messageID = sentMsg.key.id;
 
-                // Get actual text from message
-                const userText = mekInfo?.message?.conversation || mekInfo?.message?.extendedTextMessage?.text;
-                if (!userText) return;
+    // Wait for reply
+    const handler = async (msgUpdate) => {
+      try {
+        const mekInfo = msgUpdate?.messages?.[0];
+        if (!mekInfo?.message) return;
 
-                // Check if reply is for this message
-                const contextId = mekInfo?.message?.extendedTextMessage?.contextInfo?.stanzaId;
-                if (contextId !== messageID) return;
+        const userText =
+          mekInfo?.message?.conversation ||
+          mekInfo?.message?.extendedTextMessage?.text;
 
-                const choice = parseInt(userText.trim());
-                if (!choice || choice < 1 || choice > downloads.length) return reply("❌ Invalid choice! Please reply with a valid number.");
+        const isReply =
+          mekInfo?.message?.extendedTextMessage?.contextInfo?.stanzaId === messageID;
+        if (!isReply) return;
 
-                await conn.sendMessage(from, { react: { text: "⬇️", key: mekInfo.key } });
+        const choice = parseInt(userText.trim()) - 1;
+        if (choice < 0 || choice >= downloads.length)
+          return reply("❌ Invalid choice! Reply with a valid number.");
 
-                const selected = downloads[choice - 1];
-                await conn.sendMessage(from, {
-                    video: { url: selected.url },
-                    mimetype: "video/mp4",
-                    caption: `*${selected.quality}*`
-                }, { quoted: m });
+        const selected = downloads[choice];
 
-                await conn.sendMessage(from, { react: { text: "✅", key: mekInfo.key } });
+        // React downloading
+        await conn.sendMessage(from, { react: { text: "⬇️", key: mekInfo.key } });
 
-                // Remove listener after successful reply
-                conn.ev.off("messages.upsert", listener);
-            } catch (err) {
-                console.error("Reply handler error:", err);
-            }
-        };
+        // Send as document to avoid Heroku crash
+        await conn.sendMessage(from, {
+          document: { url: selected.url },
+          mimetype: "video/mp4",
+          fileName: `facebook_${choice+1}.mp4`,
+          caption: `*${selected.quality}*`
+        }, { quoted: m });
 
-        conn.ev.on("messages.upsert", listener);
+        // React done
+        await conn.sendMessage(from, { react: { text: "✅", key: mekInfo.key } });
 
-    } catch (err) {
+        // Remove listener
+        conn.ev.off("messages.upsert", handler);
+      } catch (err) {
         console.error(err);
-        reply("💔 Failed to download the video. Please try again later 🐼");
-    }
+        reply("⚠️ Error while processing your reply.");
+      }
+    };
+
+    conn.ev.on("messages.upsert", handler);
+
+  } catch (err) {
+    console.error(err);
+    reply("💔 Failed to download the video. Try again later 🐼");
+  }
 });

@@ -1,8 +1,9 @@
 const { cmd } = require('../command');
+const axios = require('axios');
 
 cmd({
-  pattern: 'fbdown',
-  desc: 'Download Facebook video and send',
+  pattern: 'fb2',
+  desc: 'Download Facebook video with number reply',
   category: 'downloader',
   react: '🎬',
   async exec(socket, msg, args) {
@@ -10,30 +11,22 @@ cmd({
       if (!args[0]) return await socket.sendMessage(msg.key.remoteJid, { text: 'Please provide Facebook video link!' }, { quoted: msg });
 
       const fbUrl = args[0];
-      // Facebook API call
       const res = await axios.get(`https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(fbUrl)}`);
       const data = res.data;
 
-      if (!data || !data.result || !data.result.downloads || !data.result.downloads.length) {
+      if (!data?.result?.downloads?.length) {
         return await socket.sendMessage(msg.key.remoteJid, { text: '💔 Failed to fetch video. Try another link.' }, { quoted: msg });
       }
 
       const downloads = data.result.downloads;
+      let listText = 'Choose video quality by replying with number:\n\n';
+      downloads.forEach((d, i) => {
+        listText += `${i + 1}. ${d.quality}\n`;
+      });
 
-      // Create buttons for quality selection
-      const buttons = downloads.map((d, i) => ({
-        buttonId: `fbchoose_${i}`,
-        buttonText: { displayText: d.quality },
-        type: 1
-      }));
+      await socket.sendMessage(msg.key.remoteJid, { text: listText }, { quoted: msg });
 
-      await socket.sendMessage(msg.key.remoteJid, {
-        text: 'Choose video quality to download:',
-        buttons,
-        headerType: 1
-      }, { quoted: msg });
-
-      // Save data in temporary map to access in reply
+      // Save in cache for number reply
       socket.fbVideoCache = socket.fbVideoCache || new Map();
       socket.fbVideoCache.set(msg.key.id, downloads);
 
@@ -44,28 +37,31 @@ cmd({
   }
 });
 
-// Button reply handler
+// Handle number reply
 cmd({
-  pattern: 'fbchoose_',
+  pattern: /^\d+$/,
+  fromMe: false,
   async exec(socket, msg) {
     try {
-      const id = msg.message.extendedTextMessage.contextInfo.stanzaId;
-      const index = parseInt(msg.text.replace('fbchoose_', ''));
-      const downloads = socket.fbVideoCache.get(id);
+      const id = msg.message.extendedTextMessage?.contextInfo?.stanzaId;
+      if (!id) return;
 
-      if (!downloads || !downloads[index]) {
-        return await socket.sendMessage(msg.key.remoteJid, { text: '❌ Video not found in cache.' }, { quoted: msg });
+      const downloads = socket.fbVideoCache?.get(id);
+      if (!downloads) return; // no cached video
+
+      const num = parseInt(msg.text);
+      if (!num || num < 1 || num > downloads.length) {
+        return await socket.sendMessage(msg.key.remoteJid, { text: '❌ Invalid number. Try again.' }, { quoted: msg });
       }
 
-      const chosen = downloads[index];
+      const chosen = downloads[num - 1];
 
       await socket.sendMessage(msg.key.remoteJid, {
         video: { url: chosen.url },
         caption: `🎬 Sending video: ${chosen.quality}`
       }, { quoted: msg });
 
-      // Clear cache for this message
-      socket.fbVideoCache.delete(id);
+      socket.fbVideoCache.delete(id); // clear cache
 
     } catch (err) {
       console.log(err);

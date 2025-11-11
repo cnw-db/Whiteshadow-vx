@@ -15,60 +15,46 @@ cmd({
   use: ".facebook <url>",
   filename: __filename
 }, async (conn, mek, m, { from, q, reply }) => {
+  if (!q) return reply("🚩 Please provide a Facebook URL 🐼");
+
   try {
-    if (!q) return reply("🚩 Please provide a Facebook URL 🐼");
-
     const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;
-    const res = await axios.get(apiUrl);
-    const json = res.data;
+    const { data: json } = await axios.get(apiUrl);
 
-    if (!json.status || !json.result || !json.result.downloads) 
+    if (!json.status || !json.result?.downloads?.length) 
       return reply("❌ No video found or invalid URL.");
 
     const thumb = json.result.thumbnail;
     const downloads = json.result.downloads;
 
-    // Prepare caption with choices
+    // Send caption + choices
     let caption = `🎥 *WHITESHADOW-MD FACEBOOK DOWNLOADER* 🎥\n\n`;
-    caption += `📝 *URL:* ${q}\n\n`;
-    caption += `💬 Reply with your choice:\n`;
-    downloads.forEach((d, i) => {
-      caption += `${i+1}️⃣ ${d.quality}\n`;
-    });
+    caption += `📝 URL: ${q}\n\n💬 Reply with your choice:\n`;
+    downloads.forEach((d, i) => caption += `${i+1}️⃣ ${d.quality}\n`);
     caption += `\n© Powered by WhiteShadow-MD`;
 
-    // Send thumbnail + caption
-    const sentMsg = await conn.sendMessage(from, {
-      image: { url: thumb },
-      caption: caption
-    }, { quoted: fakevCard });
+    const sentMsg = await conn.sendMessage(from, { image: { url: thumb }, caption }, { quoted: fakevCard });
+    const msgId = sentMsg.key.id;
 
-    const messageID = sentMsg.key.id;
-
-    // Wait for reply
-    const handler = async (msgUpdate) => {
+    // Listener for reply
+    const replyHandler = async (msgUpdate) => {
       try {
-        const mekInfo = msgUpdate?.messages?.[0];
-        if (!mekInfo?.message) return;
+        const msg = msgUpdate.messages?.[0];
+        if (!msg?.message) return;
 
-        const userText =
-          mekInfo?.message?.conversation ||
-          mekInfo?.message?.extendedTextMessage?.text;
-
-        const isReply =
-          mekInfo?.message?.extendedTextMessage?.contextInfo?.stanzaId === messageID;
+        const userText = msg.message.conversation || msg.message.extendedTextMessage?.text;
+        const isReply = msg.message.extendedTextMessage?.contextInfo?.stanzaId === msgId;
         if (!isReply) return;
 
         const choice = parseInt(userText.trim()) - 1;
-        if (choice < 0 || choice >= downloads.length)
-          return reply("❌ Invalid choice! Reply with a valid number.");
+        if (isNaN(choice) || !downloads[choice]) return reply("❌ Reply with a valid number!");
 
         const selected = downloads[choice];
 
         // React downloading
-        await conn.sendMessage(from, { react: { text: "⬇️", key: mekInfo.key } });
+        await conn.sendMessage(from, { react: { text: "⬇️", key: msg.key } });
 
-        // Send as document to avoid Heroku crash
+        // Send as document (safe for Heroku)
         await conn.sendMessage(from, {
           document: { url: selected.url },
           mimetype: "video/mp4",
@@ -77,20 +63,20 @@ cmd({
         }, { quoted: m });
 
         // React done
-        await conn.sendMessage(from, { react: { text: "✅", key: mekInfo.key } });
+        await conn.sendMessage(from, { react: { text: "✅", key: msg.key } });
 
-        // Remove listener
-        conn.ev.off("messages.upsert", handler);
+        // Remove listener to prevent multiple triggers
+        conn.ev.off("messages.upsert", replyHandler);
+
       } catch (err) {
-        console.error(err);
-        reply("⚠️ Error while processing your reply.");
+        console.error("Reply handler error:", err);
       }
     };
 
-    conn.ev.on("messages.upsert", handler);
+    conn.ev.on("messages.upsert", replyHandler);
 
   } catch (err) {
-    console.error(err);
+    console.error("API error:", err);
     reply("💔 Failed to download the video. Try again later 🐼");
   }
 });

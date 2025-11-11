@@ -10,19 +10,16 @@ cmd({
   use: ".facebook <url>",
   filename: __filename
 },
-async (conn, mek, m, { from, q, reply }) => {
+async (conn, mek, m, { from, q, reply, sleep }) => {
   try {
     if (!q) return reply("🚩 *Please provide a valid Facebook video link!*");
 
-    // Fetch video info from API
-    const api = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;
-    const res = await axios.get(api);
+    const res = await axios.get(`https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`);
     const data = res.data?.result;
 
-    if (!data || !data.downloads || data.downloads.length === 0)
+    if (!data || !data.downloads?.length)
       return reply("❌ *Couldn't find downloadable links. Try another link!*");
 
-    // Create video option list
     const qualityList = data.downloads.map((v, i) => `*${i + 1}.* ${v.quality}`).join("\n");
 
     const caption = `⚡ *WHITESHADOW-MD — FACEBOOK DOWNLOADER* ⚡
@@ -32,9 +29,9 @@ Choose your desired quality 👇
 
 ${qualityList}
 
-📌 *Reply with the number (1, 2, 3...)* to download.
-`;
+📌 *Reply with the number (1, 2, 3...)* to download.`;
 
+    // Send main message
     const sentMsg = await conn.sendMessage(from, {
       image: { url: data.thumbnail },
       caption: caption,
@@ -47,47 +44,62 @@ ${qualityList}
           sourceUrl: q
         }
       }
-    });
+    }, { quoted: mek });
 
-    const messageID = sentMsg.key.id;
+    // 🕐 Wait for reply (up to 60 seconds)
+    const waitForReply = async () => {
+      return new Promise((resolve) => {
+        const listener = async (msgUpdate) => {
+          try {
+            const msg = msgUpdate?.messages?.[0];
+            if (!msg?.message) return;
 
-    // Reply listener
-    conn.ev.on("messages.upsert", async (msgUpdate) => {
-      try {
-        const mekInfo = msgUpdate?.messages?.[0];
-        if (!mekInfo?.message) return;
+            const userText =
+              msg.message.conversation ||
+              msg.message.extendedTextMessage?.text;
 
-        const userText =
-          mekInfo?.message?.conversation ||
-          mekInfo?.message?.extendedTextMessage?.text;
+            const contextId =
+              msg.message?.extendedTextMessage?.contextInfo?.stanzaId;
 
-        const isReply =
-          mekInfo?.message?.extendedTextMessage?.contextInfo?.stanzaId === messageID;
+            // Only accept replies to our message
+            if (contextId !== sentMsg.key.id) return;
 
-        if (!isReply) return;
+            conn.ev.off("messages.upsert", listener); // remove listener after one match
+            resolve(userText.trim());
+          } catch {
+            resolve(null);
+          }
+        };
+        conn.ev.on("messages.upsert", listener);
 
-        const choice = parseInt(userText.trim());
-        if (isNaN(choice) || choice < 1 || choice > data.downloads.length) {
-          return reply("❌ *Invalid choice! Please reply with a valid number.*");
-        }
+        // Timeout after 60s
+        setTimeout(() => {
+          conn.ev.off("messages.upsert", listener);
+          resolve(null);
+        }, 60000);
+      });
+    };
 
-        const selected = data.downloads[choice - 1];
-        await conn.sendMessage(from, { react: { text: "⬇️", key: mekInfo.key } });
+    const choice = await waitForReply();
 
-        // 🔥 Send video
-        await conn.sendMessage(from, {
-          video: { url: selected.url },
-          mimetype: "video/mp4",
-          caption: `🎥 *${selected.quality} Video* | WhiteShadow-MD`
-          // document: true  <-- enable this line to send as document
-        }, { quoted: mek });
+    if (!choice) return reply("⏰ *Time out!* Please send the command again.");
+    const index = parseInt(choice);
 
-        await conn.sendMessage(from, { react: { text: "✅", key: mekInfo.key } });
+    if (isNaN(index) || index < 1 || index > data.downloads.length)
+      return reply("❌ *Invalid number!* Reply with a valid option.");
 
-      } catch (err) {
-        console.error("Reply handler error:", err);
-      }
-    });
+    const selected = data.downloads[index - 1];
+
+    await conn.sendMessage(from, { react: { text: "⬇️", key: mek.key } });
+
+    await conn.sendMessage(from, {
+      video: { url: selected.url },
+      mimetype: "video/mp4",
+      caption: `🎥 *${selected.quality} Video* | WhiteShadow-MD`
+      // document: true // <- uncomment to send as document
+    }, { quoted: mek });
+
+    await conn.sendMessage(from, { react: { text: "✅", key: mek.key } });
 
   } catch (err) {
     console.error(err);

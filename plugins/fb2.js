@@ -1,138 +1,96 @@
 const axios = require("axios");
-const { cmd } = require('../command');
-const { fetchJson } = require('../lib/functions');
-
-const api = `https://nethu-api-ashy.vercel.app`;
+const { cmd } = require("../command");
 
 cmd({
   pattern: "facebook2",
   alias: ["fb2", "fbv", "fbdown", "fbdl"],
-  react: "📥",
-  desc: "Download Facebook videos (HD/SD) - WhiteShadow-MD",
+  react: "🎥",
+  desc: "Download Facebook videos - WhiteShadow-MD",
   category: "download",
-  use: ".facebook2 <url>",
+  use: ".facebook <url>",
   filename: __filename
 },
 async (conn, mek, m, { from, q, reply }) => {
   try {
-    if (!q) return reply("🚩 *Send a valid Facebook video URL!*");
+    if (!q) return reply("🚩 *Please provide a valid Facebook video link!*");
 
-    // Fetch from API
-    const fb = await fetchJson(`${api}/download/fbdown?url=${encodeURIComponent(q)}`);
+    // Fetch video info from API
+    const api = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;
+    const res = await axios.get(api);
+    const data = res.data?.result;
 
-    if (!fb.result || (!fb.result.hd && !fb.result.sd)) {
-      return reply("❌ *Couldn't find a downloadable video for that link.*");
-    }
+    if (!data || !data.downloads || data.downloads.length === 0)
+      return reply("❌ *Couldn't find downloadable links. Try another link!*");
 
-    // Clean, WhiteShadow style caption
-    const caption = `⚡ *WHITESHADOW-MD — FACEBOOK DL* ⚡
+    // Create video option list
+    const qualityList = data.downloads.map((v, i) => `*${i + 1}.* ${v.quality}`).join("\n");
 
-🔗 Link: ${q}
+    const caption = `⚡ *WHITESHADOW-MD — FACEBOOK DOWNLOADER* ⚡
 
-Choose quality:
-• 1 — HD (if available)
-• 2 — SD (if available)
+🎬 *Video Detected!*
+Choose your desired quality 👇
 
-Or just tap a button below.`;
+${qualityList}
 
-    // Buttons for quick choice (HD / SD)
-    const buttons = [
-      { buttonId: 'WS_FB_HD', buttonText: { displayText: '🎬 HD' }, type: 1 },
-      { buttonId: 'WS_FB_SD', buttonText: { displayText: '📺 SD' }, type: 1 }
-    ];
+📌 *Reply with the number (1, 2, 3...)* to download.
+`;
 
-    // Footer info (compact branding)
-    const footer = 'WhiteShadow-MD • Owner: Chamod';
-
-    // Send thumbnail + buttons (no fake vCard / no fake quote)
     const sentMsg = await conn.sendMessage(from, {
-      image: { url: fb.result.thumb },
-      caption,
-      footer,
-      buttons,
-      headerType: 4
-    }, { quoted: mek }); // quoted: mek keeps it neat in chat
+      image: { url: data.thumbnail },
+      caption: caption,
+      contextInfo: {
+        externalAdReply: {
+          title: "Facebook Downloader",
+          body: "WhiteShadow-MD | Powered by Chamod",
+          thumbnailUrl: data.thumbnail,
+          mediaType: 1,
+          sourceUrl: q
+        }
+      }
+    });
 
     const messageID = sentMsg.key.id;
 
-    // Listen to replies / button presses
-    const handler = async (msgUpdate) => {
+    // Reply listener
+    conn.ev.on("messages.upsert", async (msgUpdate) => {
       try {
         const mekInfo = msgUpdate?.messages?.[0];
-        if (!mekInfo || !mekInfo.message) return;
+        if (!mekInfo?.message) return;
 
-        // Only respond to messages in the same chat
-        if ((mekInfo.key?.remoteJid || '') !== from) return;
+        const userText =
+          mekInfo?.message?.conversation ||
+          mekInfo?.message?.extendedTextMessage?.text;
 
-        // Detect button reply
-        const btnResp = mekInfo.message?.buttonsResponseMessage?.selectedButtonId;
-        // Detect plain text reply
-        const textResp =
-          mekInfo.message?.conversation ||
-          mekInfo.message?.extendedTextMessage?.text ||
-          '';
+        const isReply =
+          mekInfo?.message?.extendedTextMessage?.contextInfo?.stanzaId === messageID;
 
-        // Make sure user is replying to our menu (either by quoting it or via buttons)
-        const isReplyToMenu = mekInfo.message?.extendedTextMessage?.contextInfo?.stanzaId === messageID
-                              || !!btnResp;
+        if (!isReply) return;
 
-        if (!isReplyToMenu) return;
-
-        await conn.sendMessage(from, { react: { text: "⬇️", key: mekInfo.key } });
-
-        let choice = (btnResp || textResp).toString().trim().toLowerCase();
-
-        // Normalize common replies
-        if (choice === '1' || choice === '🎬 hd' || choice === 'ws_fb_hd' || choice === 'hd') {
-          // HD
-          if (!fb.result.hd) {
-            await reply("❌ *HD not available for this video.*");
-          } else {
-            await conn.sendMessage(from, {
-              video: { url: fb.result.hd },
-              mimetype: "video/mp4",
-              caption: "🎬 *Here is your HD video — WhiteShadow-MD*"
-            }, { quoted: mek });
-          }
-
-        } else if (choice === '2' || choice === '📺 sd' || choice === 'ws_fb_sd' || choice === 'sd') {
-          // SD
-          if (!fb.result.sd) {
-            await reply("❌ *SD not available for this video.*");
-          } else {
-            await conn.sendMessage(from, {
-              video: { url: fb.result.sd },
-              mimetype: "video/mp4",
-              caption: "📺 *Here is your SD video — WhiteShadow-MD*"
-            }, { quoted: mek });
-          }
-
-        } else {
-          // Invalid
-          await reply("⚠️ *Invalid option.* Reply with 1 (HD) or 2 (SD), or tap a button.");
+        const choice = parseInt(userText.trim());
+        if (isNaN(choice) || choice < 1 || choice > data.downloads.length) {
+          return reply("❌ *Invalid choice! Please reply with a valid number.*");
         }
 
-        // react done
+        const selected = data.downloads[choice - 1];
+        await conn.sendMessage(from, { react: { text: "⬇️", key: mekInfo.key } });
+
+        // 🔥 Send video
+        await conn.sendMessage(from, {
+          video: { url: selected.url },
+          mimetype: "video/mp4",
+          caption: `🎥 *${selected.quality} Video* | WhiteShadow-MD`
+          // document: true  <-- enable this line to send as document
+        }, { quoted: mek });
+
         await conn.sendMessage(from, { react: { text: "✅", key: mekInfo.key } });
 
       } catch (err) {
-        console.error("fb reply handler error:", err);
-        // don't spam user with errors; optionally notify
-        try { await reply("⚠️ *Error while processing reply.*"); } catch(e) {}
+        console.error("Reply handler error:", err);
       }
-    };
-
-    // Attach temporary listener
-    conn.ev.on("messages.upsert", handler);
-
-    // Optional: auto-remove listener after some time to avoid memory leak
-    // (If you prefer persistent listening, remove the timeout logic)
-    setTimeout(() => {
-      try { conn.ev.removeListener("messages.upsert", handler); } catch (e) {}
-    }, 1000 * 60 * 3); // remove after 3 minutes
+    });
 
   } catch (err) {
     console.error(err);
-    reply("💔 *Failed to process Facebook video. Try again later.*");
+    reply("💔 *Failed to download Facebook video. Please try again later!*");
   }
 });

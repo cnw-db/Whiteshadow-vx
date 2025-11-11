@@ -12,9 +12,9 @@ const fakevCard = {
 };
 
 cmd({
-    pattern: "facebook",
+    pattern: "facebook2",
     react: "🎥",
-    alias: ["fbb", "fbvideo", "fb"],
+    alias: ["fbb2", "fbvideo", "fb2"],
     desc: "Download Facebook videos via number reply",
     category: "download",
     use: ".facebook <facebook_url>",

@@ -1,78 +1,75 @@
 const { cmd } = require('../command');
-const axios = require('axios');
-const { 
-    prepareWAMessageMedia, 
-    generateWAMessageFromContent, 
-    generateWAMessageContent 
-} = require('@whiskeysockets/baileys');
 
 cmd({
-    pattern: 'fb2',
-    desc: 'Download Facebook video from a link',
-    category: 'downloader',
-    react: '📥',
-    async exec(socket, msg, args) {
-        const from = msg.key.remoteJid;
-        const reply = msg.message?.conversation || args.join(' ');
+  pattern: 'fbdown',
+  desc: 'Download Facebook video and send',
+  category: 'downloader',
+  react: '🎬',
+  async exec(socket, msg, args) {
+    try {
+      if (!args[0]) return await socket.sendMessage(msg.key.remoteJid, { text: 'Please provide Facebook video link!' }, { quoted: msg });
 
-        if (!reply) return socket.sendMessage(from, { text: '❌ Please provide a Facebook video link.' }, { quoted: msg });
+      const fbUrl = args[0];
+      // Facebook API call
+      const res = await axios.get(`https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(fbUrl)}`);
+      const data = res.data;
 
-        try {
-            // Fetch JSON from API
-            const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(reply)}`;
-            const { data } = await axios.get(apiUrl);
+      if (!data || !data.result || !data.result.downloads || !data.result.downloads.length) {
+        return await socket.sendMessage(msg.key.remoteJid, { text: '💔 Failed to fetch video. Try another link.' }, { quoted: msg });
+      }
 
-            if (!data.status || !data.result) {
-                return socket.sendMessage(from, { text: '💔 Failed to fetch video. Please try again.' }, { quoted: msg });
-            }
+      const downloads = data.result.downloads;
 
-            const { thumbnail, downloads } = data.result;
+      // Create buttons for quality selection
+      const buttons = downloads.map((d, i) => ({
+        buttonId: `fbchoose_${i}`,
+        buttonText: { displayText: d.quality },
+        type: 1
+      }));
 
-            // Build interactive reply
-            let text = `💻 *Facebook Video Found!*\nChoose the quality to download by replying with number:\n\n`;
-            downloads.forEach((d, i) => {
-                text += `*${i + 1}.* ${d.quality}\n`;
-            });
+      await socket.sendMessage(msg.key.remoteJid, {
+        text: 'Choose video quality to download:',
+        buttons,
+        headerType: 1
+      }, { quoted: msg });
 
-            // Send thumbnail + options
-            const media = await prepareWAMessageMedia({ image: { url: thumbnail } }, { upload: socket.waUploadToServer });
-            const content = generateWAMessageFromContent(from, generateWAMessageContent({
-                imageMessage: media.imageMessage,
-                caption: text
-            }), { quoted: msg });
-            await socket.relayMessage(from, content.message, { messageId: content.key.id });
+      // Save data in temporary map to access in reply
+      socket.fbVideoCache = socket.fbVideoCache || new Map();
+      socket.fbVideoCache.set(msg.key.id, downloads);
 
-            // Store the downloads temporarily for this user
-            socket.fbDownloads = socket.fbDownloads || {};
-            socket.fbDownloads[from] = downloads;
-
-        } catch (e) {
-            console.log(e);
-            return socket.sendMessage(from, { text: '💔 Failed to download Facebook video. Please try again later!' }, { quoted: msg });
-        }
+    } catch (err) {
+      console.log(err);
+      await socket.sendMessage(msg.key.remoteJid, { text: '❌ Error occurred while fetching video.' }, { quoted: msg });
     }
+  }
 });
 
-// Reply handler
+// Button reply handler
 cmd({
-    pattern: /^[1-9]$/,
-    category: 'downloader',
-    async exec(socket, msg) {
-        const from = msg.key.remoteJid;
-        const reply = msg.message.conversation.trim();
+  pattern: 'fbchoose_',
+  async exec(socket, msg) {
+    try {
+      const id = msg.message.extendedTextMessage.contextInfo.stanzaId;
+      const index = parseInt(msg.text.replace('fbchoose_', ''));
+      const downloads = socket.fbVideoCache.get(id);
 
-        if (!socket.fbDownloads || !socket.fbDownloads[from]) return;
-        const downloads = socket.fbDownloads[from];
+      if (!downloads || !downloads[index]) {
+        return await socket.sendMessage(msg.key.remoteJid, { text: '❌ Video not found in cache.' }, { quoted: msg });
+      }
 
-        const index = parseInt(reply) - 1;
-        if (index < 0 || index >= downloads.length) return;
+      const chosen = downloads[index];
 
-        const chosen = downloads[index];
+      await socket.sendMessage(msg.key.remoteJid, {
+        video: { url: chosen.url },
+        caption: `🎬 Sending video: ${chosen.quality}`
+      }, { quoted: msg });
 
-        // Send selected video
-        await socket.sendMessage(from, { video: { url: chosen.url }, caption: `🎬 Downloading: ${chosen.quality}` });
+      // Clear cache for this message
+      socket.fbVideoCache.delete(id);
 
-        // Clear temporary storage
-        delete socket.fbDownloads[from];
+    } catch (err) {
+      console.log(err);
+      await socket.sendMessage(msg.key.remoteJid, { text: '❌ Error sending video.' }, { quoted: msg });
     }
+  }
 });

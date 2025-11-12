@@ -3,19 +3,19 @@ const { cmd } = require('../command');
 
 cmd({
   pattern: "facebook",
-  alias: ["fb"],
+  alias: ["fb"], 
   desc: "Download Facebook videos",
   category: "download",
   filename: __filename
 }, async (conn, m, store, { from, q, reply }) => {
   try {
     if (!q || !q.startsWith("https://")) {
-      return reply("❌ Please provide a valid Facebook video URL.");
+      return conn.sendMessage(from, { text: "❌ Please provide a valid Facebook video URL." }, { quoted: m });
     }
 
     await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-    // ✅ Fetch video data
+    // ✅ Fetching data from ootaizumi API
     const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;
     const response = await axios.get(apiUrl);
     const data = response.data;
@@ -24,20 +24,23 @@ cmd({
       return reply("⚠️ Failed to fetch Facebook video. Check the link and try again.");
     }
 
-    // Filter only video downloads
-    const videoDownloads = data.downloads.filter(d => !d.quality.toLowerCase().includes("mp3") && !d.quality.toLowerCase().includes("audio"));
-    if (!videoDownloads.length) return reply("⚠️ No video download links found.");
+    // Filter only video downloads (remove audio)
+    const downloads = data.downloads.filter(d => !d.quality.toLowerCase().includes("mp3") && !d.quality.toLowerCase().includes("audio"));
+
+    if (downloads.length === 0) {
+      return reply("⚠️ No video download options available.");
+    }
 
     const caption = `
-🎬 *Facebook Video Downloader*
+📺 *Facebook Video Downloader* 📥
 
-🔗 *Link:* ${q}
+📑 *Link:* ${q}
 
-💡 Reply with the number to download:
+🔢 *Reply with the number below to download*
 
-${videoDownloads.map((d, i) => `*${i+1}*️⃣ ${d.quality}`).join('\n')}
+${downloads.map((d, i) => `${i+1}️⃣ ${d.quality}`).join('\n')}
 
-> Powered by 𝙒𝙝𝙞𝙩𝙚𝙎𝙝𝙖𝙙𝙤𝙬-MD`;
+> Powered by WhiteShadow`;
 
     const sentMsg = await conn.sendMessage(from, {
       image: { url: data.thumbnail },
@@ -46,7 +49,7 @@ ${videoDownloads.map((d, i) => `*${i+1}*️⃣ ${d.quality}`).join('\n')}
 
     const messageID = sentMsg.key.id;
 
-    // 🧠 Handle user reply for video download
+    // 🧠 Interactive Reply System
     conn.ev.on("messages.upsert", async (msgData) => {
       const receivedMsg = msgData.messages[0];
       if (!receivedMsg?.message) return;
@@ -56,25 +59,25 @@ ${videoDownloads.map((d, i) => `*${i+1}*️⃣ ${d.quality}`).join('\n')}
       const isReplyToBot = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === messageID;
 
       if (isReplyToBot) {
+        await conn.sendMessage(senderID, { react: { text: '⏳', key: receivedMsg.key } });
+
         const index = parseInt(receivedText.trim()) - 1;
-        const selected = videoDownloads[index];
+        const selected = downloads[index];
 
         if (selected) {
-          await conn.sendMessage(senderID, { react: { text: '⏳', key: receivedMsg.key } });
-
           await conn.sendMessage(senderID, {
             video: { url: selected.url },
             caption: `📥 *Downloaded: ${selected.quality}*`,
             mimetype: "video/mp4"
           }, { quoted: receivedMsg });
         } else {
-          await reply("❌ Invalid number! Reply with a valid number from the list.");
+          reply("❌ Invalid option! Please reply with a valid number from the list.");
         }
       }
     });
 
   } catch (error) {
     console.error("Facebook Plugin Error:", error);
-    reply("❌ Something went wrong while fetching the Facebook video.");
+    reply("❌ An error occurred while processing your request. Please try again later.");
   }
 });

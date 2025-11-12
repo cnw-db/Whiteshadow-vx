@@ -1,69 +1,80 @@
-const axios = require("axios");  
-const { cmd } = require('../command');  
+const axios = require("axios");
+const { cmd } = require('../command');
 
-const activeReplies = new Map(); // prevent memory leak
+cmd({
+  pattern: "facebook",
+  alias: ["fb"],
+  desc: "Download Facebook videos",
+  category: "download",
+  filename: __filename
+}, async (conn, m, store, { from, q, reply }) => {
+  try {
+    if (!q || !q.startsWith("https://")) {
+      return reply("❌ Please provide a valid Facebook video URL.");
+    }
 
-cmd({  
-  pattern: "facebook",  
-  alias: ["fb"],  
-  desc: "Download Facebook videos",  
-  category: "download",  
-  filename: __filename  
-}, async (conn, m, store, { from, q, reply }) => {  
-  try {  
-    if (!q || !q.startsWith("https://")) return reply("❌ Please provide a valid Facebook URL.");  
+    await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-    await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });  
+    // ✅ Fetch video data
+    const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;
+    const response = await axios.get(apiUrl);
+    const data = response.data;
 
-    const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;  
-    const { data } = await axios.get(apiUrl);  
+    if (!data?.thumbnail || !data?.downloads) {
+      return reply("⚠️ Failed to fetch Facebook video. Check the link and try again.");
+    }
 
-    if (!data?.downloads || !data.thumbnail) return reply("⚠️ Couldn't retrieve Facebook media.");  
+    // Filter only video downloads
+    const videoDownloads = data.downloads.filter(d => !d.quality.toLowerCase().includes("mp3") && !d.quality.toLowerCase().includes("audio"));
+    if (!videoDownloads.length) return reply("⚠️ No video download links found.");
 
-    const hd = data.downloads.find(d => d.quality.includes("720p"))?.url;  
-    const sd = data.downloads.find(d => d.quality.includes("360p"))?.url;  
+    const caption = `
+🎬 *Facebook Video Downloader*
 
-    const caption = `🎬 *Facebook Video Downloader*\n\n📖 *Title:* Facebook Video\n🔗 *URL:* ${q}\n\n📌 Reply:\n1️⃣ SD Quality\n2️⃣ HD Quality\n\n> ⚡ Powered by WhiteShadow-MD`;  
+🔗 *Link:* ${q}
 
-    const sentMsg = await conn.sendMessage(from, { image: { url: data.thumbnail }, caption }, { quoted: m });  
-    activeReplies.set(sentMsg.key.id, { hd, sd });  
+💡 Reply with the number to download:
 
-    setTimeout(() => activeReplies.delete(sentMsg.key.id), 15000);  
-  } catch (e) {  
-    console.error(e);  
-    reply("❌ Error fetching data.");  
-  }  
-});
+${videoDownloads.map((d, i) => `*${i+1}*️⃣ ${d.quality}`).join('\n')}
 
-// Reply handler
-global.FB_REPLY_HANDLER = global.FB_REPLY_HANDLER || false;
-if (!global.FB_REPLY_HANDLER) {
-  conn.ev.on("messages.upsert", async (msgData) => {
-    try {
-      const msg = msgData.messages[0]; if (!msg?.message) return;
-      const text = msg.message.conversation || msg.message.extendedTextMessage?.text;
-      const replyTo = msg.message.extendedTextMessage?.contextInfo?.stanzaId;
-      const sender = msg.key.remoteJid;
+> Powered by 𝙒𝙝𝙞𝙩𝙚𝙎𝙝𝙖𝙙𝙤𝙬-MD`;
 
-      if (activeReplies.has(replyTo)) {
-        const { hd, sd } = activeReplies.get(replyTo);
-        await conn.sendMessage(sender, { react: { text: '⏳', key: msg.key } });
+    const sentMsg = await conn.sendMessage(from, {
+      image: { url: data.thumbnail },
+      caption
+    }, { quoted: m });
 
-        switch (text.trim()) {
-          case "1":
-            await conn.sendMessage(sender, { video: { url: sd }, caption: "📥 Downloaded in SD" }, { quoted: msg });
-            break;
-          case "2":
-            await conn.sendMessage(sender, { video: { url: hd }, caption: "📥 Downloaded in HD" }, { quoted: msg });
-            break;
-          default:
-            await conn.sendMessage(sender, { text: "❌ Reply with 1 or 2!" }, { quoted: msg });
+    const messageID = sentMsg.key.id;
+
+    // 🧠 Handle user reply for video download
+    conn.ev.on("messages.upsert", async (msgData) => {
+      const receivedMsg = msgData.messages[0];
+      if (!receivedMsg?.message) return;
+
+      const receivedText = receivedMsg.message.conversation || receivedMsg.message.extendedTextMessage?.text;
+      const senderID = receivedMsg.key.remoteJid;
+      const isReplyToBot = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === messageID;
+
+      if (isReplyToBot) {
+        const index = parseInt(receivedText.trim()) - 1;
+        const selected = videoDownloads[index];
+
+        if (selected) {
+          await conn.sendMessage(senderID, { react: { text: '⏳', key: receivedMsg.key } });
+
+          await conn.sendMessage(senderID, {
+            video: { url: selected.url },
+            caption: `📥 *Downloaded: ${selected.quality}*`,
+            mimetype: "video/mp4"
+          }, { quoted: receivedMsg });
+        } else {
+          await reply("❌ Invalid number! Reply with a valid number from the list.");
         }
-
-        activeReplies.delete(replyTo);
       }
-    } catch (err) { console.error(err); }
-  });
+    });
 
-  global.FB_REPLY_HANDLER = true;
-}
+  } catch (error) {
+    console.error("Facebook Plugin Error:", error);
+    reply("❌ Something went wrong while fetching the Facebook video.");
+  }
+});

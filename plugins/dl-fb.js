@@ -3,18 +3,19 @@ const { cmd } = require('../command');
 
 cmd({
   pattern: "facebook",
-  alias: ["fb"], 
-  desc: "Download Facebook videos",
+  react: "🎥",
+  alias: ["fbb", "fbvideo", "fb"],
+  desc: "Download videos from Facebook",
   category: "download",
+  use: '.facebook <facebook_url>',
   filename: __filename
-}, async (conn, m, { from, q, reply }) => {
+}, async (conn, mek, { from, q, reply }) => {
   try {
-    if (!q || !q.startsWith("https://")) {
-      return reply("❌ Please provide a valid Facebook video URL.");
-    }
+    if (!q || !q.startsWith("https://")) return reply("🚩 Please provide a valid Facebook URL.");
 
-    await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
+    await conn.sendMessage(from, { react: { text: '⏳', key: mek.key } });
 
+    // ✅ Ootaizumi API
     const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;
     const { data } = await axios.get(apiUrl);
 
@@ -23,27 +24,25 @@ cmd({
     }
 
     // Filter only video downloads
-    const videoOptions = data.downloads.filter(d => !d.quality.toLowerCase().includes("audio"));
+    const videoOptions = data.downloads.filter(d => !d.quality.toLowerCase().includes("audio") && d.quality.toLowerCase().includes("download"));
 
-    if (!videoOptions.length) {
-      return reply("⚠️ No video options available for this link.");
-    }
+    if (!videoOptions.length) return reply("⚠️ No video options available for this link.");
 
     const caption = `
-📺 *Facebook Downloader* 📥
-📑 Link: ${q}
+*WHITESHADOW-MD*
+📝 ᴛɪᴛʟᴇ : Facebook Video
+🔗 ᴜʀʟ : ${q}
+🦸‍♂️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : WHITESHADOW-MD
 
-🔢 Reply with number to download:
+Reply with the number to download:
 
 ${videoOptions.map((d, i) => `${i+1}️⃣ ${d.quality}`).join("\n")}
-
-> Powered by Whiteshadow
 `;
 
     const sentMsg = await conn.sendMessage(from, {
       image: { url: data.thumbnail },
       caption
-    }, { quoted: m });
+    }, { quoted: mek });
 
     const msgID = sentMsg.key.id;
 

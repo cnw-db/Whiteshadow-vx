@@ -1,499 +1,259 @@
+// menu.js — WHITESHADOW-MD (Modern reply-based cyber/dark menu)
+// Replace your existing menu.js with this file.
+// Assumes same project structure: ../config , ../command , ../lib/functions , axios available
 const config = require('../config');
-const { cmd, commands } = require('../command');
-const { runtime } = require('../lib/functions');
+const { cmd } = require('../command');
 const axios = require('axios');
 
 cmd({
-    pattern: "menu",
-    desc: "Show interactive menu system",
-    category: "menu",
-    react: "🧾",
-    filename: __filename
+  pattern: "menu",
+  desc: "Show interactive menu (reply with 1-10)",
+  category: "menu",
+  react: "🧾",
+  filename: __filename
 }, async (conn, mek, m, { from, reply }) => {
+  try {
+    // --- dynamic status values if available ---
+    const uptime = (process.uptime && typeof process.uptime === 'function')
+      ? Math.floor(process.uptime())
+      : (config.RUNTIME_SECONDS || 0);
+
+    const uptimeHuman = (() => {
+      const s = uptime % 60;
+      const mns = Math.floor((uptime % 3600) / 60);
+      const h = Math.floor(uptime / 3600);
+      return `${h}h ${mns}m ${s}s`;
+    })();
+
+    // --- main caption (cyber/dark style) ---
+    const menuCaption = `╭━━━『 *WHITESHADOW-MD* 』━━━┈⊷
+┃ ⚡︎ *Status:* ONLINE  •  ${config.MODE || 'public'}
+┃ 👑 *Owner:* ${config.OWNER_NAME || 'Owner'}
+┃ 🤖 *Bot:* ${config.BOT_NAME || 'WHITESHADOW-MD'}
+┃ 🔣 *Prefix:* ${config.PREFIX || '.'}    •    ⏱ *Uptime:* ${uptimeHuman}
+╰━━━━━━━━━━━━━━━━━━━━┈⊷
+
+╭━━━〔 *MENU CATEGORIES* 〕━━━┈⊷
+┃ 1️⃣  • Download
+┃ 2️⃣  • Group & Admin
+┃ 3️⃣  • Fun & Reactions
+┃ 4️⃣  • Owner Tools
+┃ 5️⃣  • AI & Image
+┃ 6️⃣  • Anime & Wallpapers
+┃ 7️⃣  • Convert & Utilities
+┃ 8️⃣  • Music & Media
+┃ 9️⃣  • Settings & Privacy
+┃ 🔟  • All Commands (full list)
+╰━━━━━━━━━━━━━━━━━━━━┈⊷
+
+👉 Reply to this message with the number (1–10)
+*Example:* reply with "1" to open Download menu.
+
+${config.DESCRIPTION || ''}
+
+*© WHITESHADOW-MD* • Powered by Chamod Nimsara
+`;
+
+    // context for verified/newsletter look
+    const contextInfo = {
+      mentionedJid: [m.sender],
+      forwardingScore: 999,
+      isForwarded: true,
+      forwardedNewsletterMessageInfo: {
+        newsletterJid: config.NEWSLETTER_JID || '120363397446799567@newsletter',
+        newsletterName: config.OWNER_NAME || 'WHITESHADOW',
+        serverMessageId: Date.now() % 100000
+      }
+    };
+
+    // try to send an image intro (fallbacks to text)
+    let sentMsg;
     try {
-        const menuCaption = `╭━━━〔 *${config.BOT_NAME}* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ 👑 Owner : *${config.OWNER_NAME}*
-┃★│ 🤖 Baileys : *Multi Device*
-┃★│ 💻 Type : *NodeJs*
-┃★│ 🚀 Platform : *Heroku*
-┃★│ ⚙️ Mode : *[${config.MODE}]*
-┃★│ 🔣 Prefix : *[${config.PREFIX}]*
-┃★│ 🏷️ Version : *4.0.0 Bᴇᴛᴀ*
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-╭━━〔 *Menu List* 〕━━┈⊷
-┃◈╭─────────────·๏
-┃◈│1️⃣  📥 *Download Menu*
-┃◈│2️⃣  👥 *Group Menu*
-┃◈│3️⃣  😄 *Fun Menu*
-┃◈│4️⃣  👑 *Owner Menu*
-┃◈│5️⃣  🤖 *AI Menu*
-┃◈│6️⃣  🎎 *Anime Menu*
-┃◈│7️⃣  🔄 *Convert Menu*
-┃◈│8️⃣  📌 *Other Menu*
-┃◈│9️⃣  💞 *Reactions Menu*
-┃◈│🔟  🏠 *Main Menu*
-┃◈╰───────────┈⊷
-╰──────────────┈⊷
-> ${config.DESCRIPTION}`;
-
-        const contextInfo = {
-            mentionedJid: [m.sender],
-            forwardingScore: 999,
-            isForwarded: true,
-            forwardedNewsletterMessageInfo: {
-                newsletterJid: '120363397446799567@newsletter',
-                newsletterName: config.OWNER_NAME,
-                serverMessageId: 143
-            }
-        };
-
-        // Function to send menu image with timeout
-        const sendMenuImage = async () => {
-            try {
-                return await conn.sendMessage(
-                    from,
-                    {
-                        image: { url: config.MENU_IMAGE_URL || 'https://files.catbox.moe/cz2592.jpeg' },
-                        caption: menuCaption,
-                        contextInfo: contextInfo
-                    },
-                    { quoted: mek }
-                );
-            } catch (e) {
-                console.log('Image send failed, falling back to text');
-                return await conn.sendMessage(
-                    from,
-                    { text: menuCaption, contextInfo: contextInfo },
-                    { quoted: mek }
-                );
-            }
-        };
-
-        // Function to send menu audio with timeout
-        const sendMenuAudio = async () => {
-            try {
-                await new Promise(resolve => setTimeout(resolve, 1000)); // Small delay after image
-                await conn.sendMessage(from, {
-                    audio: { url: 'https://files.catbox.moe/mq5vez.mp3' },
-                    mimetype: 'audio/mp4',
-                    ptt: true,
-                }, { quoted: mek });
-            } catch (e) {
-                console.log('Audio send failed, continuing without it');
-            }
-        };
-
-        // Send image first, then audio sequentially
-        let sentMsg;
-        try {
-            // Send image with 10s timeout
-            sentMsg = await Promise.race([
-                sendMenuImage(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Image send timeout')), 10000))
-            ]);
-            
-            // Then send audio with 1s delay and 8s timeout
-            await Promise.race([
-                sendMenuAudio(),
-                new Promise((_, reject) => setTimeout(() => reject(new Error('Audio send timeout')), 8000))
-            ]);
-        } catch (e) {
-            console.log('Menu send error:', e);
-            if (!sentMsg) {
-                sentMsg = await conn.sendMessage(
-                    from,
-                    { text: menuCaption, contextInfo: contextInfo },
-                    { quoted: mek }
-                );
-            }
-        }
-        
-        const messageID = sentMsg.key.id;
-
-        // Menu data (complete version)
-        const menuData = {
-            '1': {
-                title: "📥 *Download Menu* 📥",
-                content: `╭━━━〔 *Download Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ 🌐 *Social Media*
-┃★│ • facebook [url]
-┃★│ • yt       [url]
-┃★│ • mediafire [url]
-┃★│ • megadl [url]
-┃★│ • tiktok [url]
-┃★│ • twitter [url]
-┃★│ • Insta [url]
-┃★│ • apk [app]
-┃★│ • img [query]
-┃★│ • tt2 [url]
-┃★│ • pins [url]
-┃★│ • apk2 [app]
-┃★│ • fb2 [url]
-┃★│ • pinterest [url]
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 🎵 *Music/Video*
-┃★│ • spotify [query]
-┃★│ • spt [url]
-┃★│ • play [song]
-┃★│ • play2-10 [song]
-┃★│ • audio [url]
-┃★│ • video [url]
-┃★│ • video2sd [url or name]
-┃★│ • video2hd [query or url]
-┃★│ • ytmp3 [url]
-┃★│ • ytmp4 [url]
-┃★│ • song [name]
-┃★│ • songx [name]
-┃★│ • videox [name]
-┃★│ • darama [name]
-┃★│ • xnxx   [name]
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            },
-            '2': {
-                title: "👥 *Group Menu* 👥",
-                content: `╭━━━〔 *Group Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ 🛠️ *Management*
-┃★│ • grouplink
-┃★│ • kickall
-┃★│ • kickall2
-┃★│ • kickall3
-┃★│ • add @user
-┃★│ • remove @user
-┃★│ • kick @user
-┃★╰──────────────
-┃★╭──────────────
-┃★│ ⚡ *Admin Tools*
-┃★│ • promote @user
-┃★│ • demote @user
-┃★│ • dismiss 
-┃★│ • revoke
-┃★│ • mute [time]
-┃★│ • unmute
-┃★│ • lockgc
-┃★│ • unlockgc
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 🏷️ *Tagging*
-┃★│ • tag @user
-┃★│ • hidetag [msg]
-┃★│ • tagall
-┃★│ • tagadmins
-┃★│ • invite
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            },
-            '3': {
-                title: "😄 *Fun Menu* 😄",
-                content: `╭━━━〔 *Fun Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ 🎭 *Interactive*
-┃★│ • shapar
-┃★│ • rate @user
-┃★│ • insult @user
-┃★│ • hack @user
-┃★│ • ship @user1 @user2
-┃★│ • character
-┃★│ • pickup
-┃★│ • joke
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 😂 *Reactions*
-┃★│ • hrt
-┃★│ • hpy
-┃★│ • syd
-┃★│ • anger
-┃★│ • shy
-┃★│ • kiss
-┃★│ • mon
-┃★│ • cunfuzed
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            },
-            '4': {
-                title: "👑 *Owner Menu* 👑",
-                content: `╭━━━〔 *Owner Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ ⚠️ *Restricted*
-┃★│ • block @user
-┃★│ • unblock @user
-┃★│ • fullpp [img]
-┃★│ • setpp [img]
-┃★│ • restart
-┃★│ • shutdown
-┃★│ • updatecmd
-┃★╰───────────���──
-┃★╭──────────────
-┃★│ ℹ️ *Info Tools*
-┃★│ • gjid
-┃★│ • jid @user
-┃★│ • listcmd
-┃★│ • allmenu
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            },
-            '5': {
-                title: "🤖 *AI Menu* 🤖",
-                content: `╭━━━〔 *AI Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ 💬 *Chat AI*
-┃★│ • ai [query]
-┃★│ • gpt3 [query]
-┃★│ • gpt2 [query]
-┃★│ • gptmini [query]
-┃★│ • gpt [query]
-┃★│ • meta [query]
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 🖼️ *Image AI*
-┃★│ • imagine [text]
-┃★│ • imagine2 [text]
-┃★│ • edit [prompt]
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 🔍 *Specialized*
-┃★│ • blackbox [query]
-┃★│ • luma [query]
-┃★│ • dj [query]
-┃★│ • white [query]
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            },
-            '6': {
-                title: "🎎 *Anime Menu* 🎎",
-                content: `╭━━━〔 *Anime Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ 🖼️ *Images*
-┃★│ • fack
-┃★│ • dog
-┃★│ • awoo
-┃★│ • garl
-┃★│ • waifu
-┃★│ • neko
-┃★│ • megnumin
-┃★│ • maid
-┃★│ • loli
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 🎭 *Characters*
-┃★│ • animegirl
-┃★│ • animegirl1-5
-┃★│ • anime1-5
-┃★│ • foxgirl
-┃★│ • naruto
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            },
-            '7': {
-                title: "🔄 *Convert Menu* 🔄",
-                content: `╭━━━〔 *Convert Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ 🖼️ *Media*
-┃★│ • sticker [img]
-┃★│ • sticker2 [img]
-┃★│ • emojimix 😎+😂
-┃★│ • take [name,text]
-┃★│ • tomp3 [video]
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 📝 *Text*
-┃★│ • fancy [text]
-┃★│ • tts [text]
-┃★│ • trt [text]
-┃★│ • base64 [text]
-┃★│ • unbase64 [text]
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            },
-            '8': {
-                title: "📌 *Other Menu* 📌",
-                content: `╭━━━〔 *Other Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ 🕒 *Utilities*
-┃★│ • timenow
-┃★│ • date
-┃★│ • count [num]
-┃★│ • calculate [expr]
-┃★│ • countx
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 🎲 *Random*
-┃★│ • flip
-┃★│ • coinflip
-┃★│ • rcolor
-┃★│ • roll
-┃★│ • fact
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 🔍 *Search*
-┃★│ • define [word]
-┃★│ • news [query]
-┃★│ • movie [name]
-┃★│ • weather [loc]
-┃★│ • yts [name]
-┃★│ • whatsong
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            },
-            '9': {
-                title: "💞 *Reactions Menu* 💞",
-                content: `╭━━━〔 *Reactions Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ ❤️ *Affection*
-┃★│ • cuddle @user
-┃★│ • hug @user
-┃★│ • kiss @user
-┃★│ • lick @user
-┃★│ • pat @user
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 😂 *Funny*
-┃★│ • bully @user
-┃★│ • bonk @user
-┃★│ • yeet @user
-┃★│ • slap @user
-┃★│ • kill @user
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 😊 *Expressions*
-┃★│ • blush @user
-┃★│ • smile @user
-┃★│ • happy @user
-┃★│ • wink @user
-┃★│ • poke @user
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            },
-            '10': {
-                title: "🏠 *Main Menu* 🏠",
-                content: `╭━━━〔 *Main Menu* 〕━━━┈⊷
-┃★╭──────────────
-┃★│ ℹ️ *Bot Info*
-┃★│ • ping
-┃★│ • live
-┃★│ • alive
-┃★│ • runtime
-┃★│ • uptime
-┃★│ • repo
-┃★│ • owner
-┃★╰──────────────
-┃★╭──────────────
-┃★│ 🛠️ *Controls*
-┃★│ • menu
-┃★│ • menu2
-┃★│ • restart
-┃★╰──────────────
-╰━━━━━━━━━━━━━━━┈⊷
-> ${config.DESCRIPTION}`,
-                image: true
-            }
-        };
-
-        // Message handler with improved error handling
-        const handler = async (msgData) => {
-            try {
-                const receivedMsg = msgData.messages[0];
-                if (!receivedMsg?.message || !receivedMsg.key?.remoteJid) return;
-
-                const isReplyToMenu = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === messageID;
-                
-                if (isReplyToMenu) {
-                    const receivedText = receivedMsg.message.conversation || 
-                                      receivedMsg.message.extendedTextMessage?.text;
-                    const senderID = receivedMsg.key.remoteJid;
-
-                    if (menuData[receivedText]) {
-                        const selectedMenu = menuData[receivedText];
-                        
-                        try {
-                            if (selectedMenu.image) {
-                                await conn.sendMessage(
-                                    senderID,
-                                    {
-                                        image: { url: config.MENU_IMAGE_URL || 'https://files.catbox.moe/cz2592.jpeg' },
-                                        caption: selectedMenu.content,
-                                        contextInfo: contextInfo
-                                    },
-                                    { quoted: receivedMsg }
-                                );
-                            } else {
-                                await conn.sendMessage(
-                                    senderID,
-                                    { text: selectedMenu.content, contextInfo: contextInfo },
-                                    { quoted: receivedMsg }
-                                );
-                            }
-
-                            await conn.sendMessage(senderID, {
-                                react: { text: '✅', key: receivedMsg.key }
-                            });
-
-                        } catch (e) {
-                            console.log('Menu reply error:', e);
-                            await conn.sendMessage(
-                                senderID,
-                                { text: selectedMenu.content, contextInfo: contextInfo },
-                                { quoted: receivedMsg }
-                            );
-                        }
-
-                    } else {
-                        await conn.sendMessage(
-                            senderID,
-                            {
-                                text: `❌ *Invalid Option!* ❌\n\nPlease reply with a number between 1-10 to select a menu.\n\n*Example:* Reply with "1" for Download Menu\n\n> ${config.DESCRIPTION}`,
-                                contextInfo: contextInfo
-                            },
-                            { quoted: receivedMsg }
-                        );
-                    }
-                }
-            } catch (e) {
-                console.log('Handler error:', e);
-            }
-        };
-
-        // Add listener
-        conn.ev.on("messages.upsert", handler);
-
-        // Remove listener after 5 minutes
-        setTimeout(() => {
-            conn.ev.off("messages.upsert", handler);
-        }, 300000);
-
+      sentMsg = await conn.sendMessage(
+        from,
+        {
+          image: { url: config.MENU_IMAGE_URL || 'https://files.catbox.moe/cz2592.jpeg' },
+          caption: menuCaption,
+          contextInfo
+        },
+        { quoted: mek }
+      );
     } catch (e) {
-        console.error('Menu Error:', e);
-        try {
-            await conn.sendMessage(
-                from,
-                { text: `❌ Menu system is currently busy. Please try again later.\n\n> ${config.DESCRIPTION}` },
-                { quoted: mek }
-            );
-        } catch (finalError) {
-            console.log('Final error handling failed:', finalError);
-        }
+      // fallback to plain text if image fails
+      sentMsg = await conn.sendMessage(from, { text: menuCaption, contextInfo }, { quoted: mek });
     }
+
+    // optionally play short intro audio (non-blocking)
+    (async () => {
+      try {
+        await new Promise(r => setTimeout(r, 800));
+        await conn.sendMessage(from, {
+          audio: { url: config.MENU_AUDIO_URL || 'https://files.catbox.moe/mq5vez.mp3' },
+          mimetype: 'audio/mp4',
+          ptt: true
+        }, { quoted: mecOrFallback(mek, sentMsg) });
+      } catch (err) {
+        // ignore audio errors
+        console.log('menu audio error:', err?.message || err);
+      }
+    })();
+
+    // NOTE: helper to pick quoted message safely
+    function mecOrFallback(original, sent) {
+      return original || (sent && sent.key ? sent : null);
+    }
+
+    // --- menu contents mapping (concise & clear) ---
+    const menuData = {
+      '1': {
+        title: "📥 Download Menu",
+        content: `╭━━━〔 *Download Menu* 〕━━━┈⊷
+• yt / ytmp4 / ytmp3 / song / video / video2hd
+• tiktok / tiktok2 / tiktokstalk
+• facebook / ig / twitter / mediafire / gdrive
+• web2zip / githubdl
+╰━━━━━━━━━━━━━━━┈⊷
+Reply .help <command> for details`
+      },
+      '2': {
+        title: "👥 Group & Admin",
+        content: `╭━━━〔 *Group & Admin* 〕━━━┈⊷
+• invite / glink / mutegc / unmute / lockgc / unlockgc
+• add @ / remove @ / promote / demote / tagall / hidetag
+• removeadmins / removemembers / revoke
+╰━━━━━━━━━━━━━━━┈⊷`
+      },
+      '3': {
+        title: "😄 Fun & Reactions",
+        content: `╭━━━〔 *Fun & Reactions* 〕━━━┈⊷
+• animegirl / waifu / dog / img / prank / hack / joke / 8ball
+• cuddle / hug / kiss / bonk / yeet / slap / blush / dance
+• emix / ship / roast / compliment / pick
+╰━━━━━━━━━━━━━━━┈⊷`
+      },
+      '4': {
+        title: "👑 Owner Tools",
+        content: `╭━━━〔 *Owner Tools* 〕━━━┈⊷
+• broadcast / broadcast2 / status / setpp / restart / shutdown
+• ban / unban / listban / env / update / forward
+• admin (takeadmin) / leave / clearchats
+╰━━━━━━━━━━━━━━━┈⊷`
+      },
+      '5': {
+        title: "🤖 AI & Image",
+        content: `╭━━━〔 *AI & Image* 〕━━━┈⊷
+• ai / openai / ai2 / ai3 / ai5 / meta / copilot
+• imagine / nanobanana / imagetools / img2vid / tofigure
+• removebg / upimg / ad (image edits & logos)
+╰━━━━━━━━━━━━━━━┈⊷`
+      },
+      '6': {
+        title: "🎎 Anime & Wallpapers",
+        content: `╭━━〔 *Anime & Wallpapers* 〕━━┈⊷
+• waifu / neko / megumin / maid / awoo / rw (wallpapers)
+• anime1..5 / garl / randomwall
+╰━━━━━━━━━━━━━━━┈⊷`
+      },
+      '7': {
+        title: "🔄 Convert & Utilities",
+        content: `╭━━━〔 *Convert & Utilities* 〕━━━┈⊷
+• sticker / take / vsticker / convert / attp / readmore
+• base64 / urlencode / urldecode / binary / dbinary / topdf
+• npn / npm (package search) / screenshot / fetch
+╰━━━━━━━━━━━━━━━┈⊷`
+      },
+      '8': {
+        title: "🎵 Music & Media",
+        content: `╭━━━〔 *Music & Media* 〕━━━┈⊷
+• song / play2 / play3 / play4 / ytmp4 / ytmp3 / videox
+• playch / csong / ytpost / spotify / sptdl
+╰━━━━━━━━━━━━━━━┈⊷`
+      },
+      '9': {
+        title: "⚙️ Settings & Privacy",
+        content: `╭━━━〔 *Settings & Privacy* 〕━━━┈⊷
+• setprefix / mode / welcome / auto-reply / autoreact / autosticker
+• antidelete / antildk / getprivacy / setonline / setppall
+╰━━━━━━━━━━━━━━━┈⊷`
+      },
+      '10': {
+        title: "📜 Full Command List",
+        content: `╭━━━〔 *Full Command List* 〕━━━┈⊷
+Reply with: *menu2* or use *.menu2* to get the full, paginated command list.
+You can also use: *.list* or *.listcmd*
+╰━━━━━━━━━━━━━━━┈⊷`
+      }
+    };
+
+    // Save the message id to match replies
+    const messageID = sentMsg.key && sentMsg.key.id ? sentMsg.key.id : null;
+
+    // Handler to listen for replies (only for this menu message)
+    const handler = async (msgData) => {
+      try {
+        const received = msgData.messages[0];
+        if (!received?.message || !received.key?.remoteJid) return;
+
+        // only treat replies that reference our menu message id
+        const isReply = received.message?.extendedTextMessage?.contextInfo?.stanzaId === messageID;
+        if (!isReply) return;
+
+        const text = received.message.conversation || received.message.extendedTextMessage?.text || '';
+        const sender = received.key.remoteJid;
+
+        // sanitize input (trim and take first token)
+        const token = text.trim().split(/\s+/)[0];
+
+        if (menuData[token]) {
+          const selected = menuData[token];
+
+          // try to send the mapped menu content as an image caption (if image available) else text
+          try {
+            await conn.sendMessage(sender, {
+              image: { url: config.MENU_IMAGE_URL || 'https://files.catbox.moe/cz2592.jpeg' },
+              caption: `╭━━━〔 *${selected.title.replace(/\*|\╭|\╰/g,'')}* 〕━━━┈⊷\n${selected.content}\n╰━━━━━━━━━━━━━━━━━━━━┈⊷`,
+              contextInfo
+            }, { quoted: received });
+          } catch (err) {
+            await conn.sendMessage(sender, { text: `${selected.title}\n\n${selected.content}`, contextInfo }, { quoted: received });
+          }
+
+          // react ok
+          try {
+            await conn.sendMessage(sender, { react: { text: '✅', key: received.key } });
+          } catch (e) {
+            // ignore react errors
+          }
+        } else {
+          // invalid option handler
+          await conn.sendMessage(sender, {
+            text: `❌ *Invalid Option!* ❌\n\nPlease reply with a number between 1 - 10 to select a menu.\n\n*Example:* Reply with "1" for Download Menu\n\n${config.DESCRIPTION || ''}`,
+            contextInfo
+          }, { quoted: received });
+        }
+      } catch (e) {
+        console.log('menu handler error:', e?.message || e);
+      }
+    };
+
+    // register listener
+    conn.ev.on('messages.upsert', handler);
+
+    // auto remove listener after 5 minutes to avoid memory leak
+    setTimeout(() => {
+      try {
+        conn.ev.off('messages.upsert', handler);
+      } catch (e) {
+        console.log('error removing menu handler:', e?.message || e);
+      }
+    }, 5 * 60 * 1000);
+
+  } catch (err) {
+    console.error('Menu command error:', err);
+    try {
+      await conn.sendMessage(from, { text: `❌ Menu system error. Try again later.\n\n${config.DESCRIPTION || ''}` }, { quoted: mek });
+    } catch (finalErr) {
+      console.log('menu final send error:', finalErr?.message || finalErr);
+    }
+  }
 });

@@ -3,8 +3,8 @@ const { cmd } = require('../command');
 
 cmd({
   pattern: "facebook",
-  alias: ["fb"],
-  desc: "Download Facebook videos or images",
+  alias: ["fb"], 
+  desc: "Download Facebook videos",
   category: "download",
   filename: __filename
 }, async (conn, m, store, { from, q, reply }) => {
@@ -15,65 +15,64 @@ cmd({
 
     await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-    // Fetch data from API
+    // ✅ Fetching data from Ootaizumi API
     const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;
-    const { data } = await axios.get(apiUrl);
+    const response = await axios.get(apiUrl);
+    const data = response.data;
 
-    if (!data?.thumbnail || !data?.downloads?.length) {
+    if (!data?.downloads || !Array.isArray(data.downloads) || data.downloads.length === 0) {
       return reply("⚠️ Failed to fetch Facebook video. Check the link and try again.");
     }
 
-    // Filter out audio only (we keep only video & image)
-    const downloads = data.downloads.filter(d => !d.quality.toLowerCase().includes("audio"));
+    // Only keep video & image options, remove audio
+    const videoOptions = data.downloads.filter(d => !d.quality.toLowerCase().includes("audio"));
 
     const caption = `
 📺 *Facebook Downloader* 📥
-🔗 Link: ${q}
+📑 *Link:* ${q}
 
-Reply with the number to download:
+🔢 *Reply with number to download:*
 
-${downloads.map((d, i) => `${i+1}️⃣ ${d.quality}`).join("\n")}
+${videoOptions.map((d, i) => `${i+1}️⃣ ${d.quality}`).join('\n')}
 
-> Powered by Whiteshadow`;
+> Powered by Whiteshadow
+`;
 
     const sentMsg = await conn.sendMessage(from, {
       image: { url: data.thumbnail },
       caption
     }, { quoted: m });
 
-    const msgID = sentMsg.key.id;
+    const messageID = sentMsg.key.id;
 
-    // Listen for reply
-    conn.ev.on("messages.upsert", async ({ messages }) => {
-      const receivedMsg = messages[0];
+    // 🧠 Interactive Reply System
+    conn.ev.on("messages.upsert", async (msgData) => {
+      const receivedMsg = msgData.messages[0];
       if (!receivedMsg?.message) return;
 
-      const text = receivedMsg.message.conversation || receivedMsg.message.extendedTextMessage?.text;
-      const sender = receivedMsg.key.remoteJid;
-      const isReplyToBot = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === msgID;
+      const receivedText = receivedMsg.message.conversation || receivedMsg.message.extendedTextMessage?.text;
+      const senderID = receivedMsg.key.remoteJid;
+      const isReplyToBot = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === messageID;
 
       if (isReplyToBot) {
-        await conn.sendMessage(sender, { react: { text: '⏳', key: receivedMsg.key } });
+        await conn.sendMessage(senderID, { react: { text: '⏳', key: receivedMsg.key } });
 
-        const index = parseInt(text.trim()) - 1;
-        const selected = downloads[index];
+        const index = parseInt(receivedText.trim()) - 1;
+        const selected = videoOptions[index];
 
         if (selected) {
-          // Determine type: video or image
-          const type = selected.quality.toLowerCase().includes("jpg") || selected.quality.toLowerCase().includes("image") ? "image" : "video";
-
-          await conn.sendMessage(sender, {
-            [type]: { url: selected.url },
-            caption: `📥 Downloaded: ${selected.quality}`
+          await conn.sendMessage(senderID, {
+            video: { url: selected.url },
+            caption: `📥 *Downloaded: ${selected.quality}*`
           }, { quoted: receivedMsg });
         } else {
-          reply("❌ Invalid option! Please reply with a valid number from the list.");
+          reply("❌ Invalid option! Reply with a valid number from the list.");
         }
       }
     });
 
   } catch (error) {
     console.error("Facebook Plugin Error:", error);
-    reply("❌ An error occurred while processing your request. Please try again later.");
+    reply("❌ An error occurred while fetching the video. Please try again later.");
   }
 });

@@ -1,91 +1,103 @@
-const axios = require("axios");
-const { cmd } = require('../command');
+const axios = require("axios");  
+const { cmd } = require('../command');  
 
-cmd({
-  pattern: "facebook",
-  alias: ["fb"],
-  desc: "🎥 Download Facebook videos (HD/SD)",
-  category: "downloader",
-  react: "🎬",
-  filename: __filename
-}, async (conn, m, store, { from, quoted, q, reply }) => {
-  try {
-    if (!q || !q.startsWith("https://")) {
-      return conn.sendMessage(from, { text: "❌ *Please provide a valid Facebook video URL!*" }, { quoted: m });
-    }
+// ✅ Active replies map to prevent memory leaks
+const activeReplies = new Map();  
 
-    await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
+cmd({  
+  pattern: "facebook",  
+  alias: ["fb"],  
+  desc: "Download Facebook videos",  
+  category: "download",  
+  filename: __filename  
+}, async (conn, m, store, { from, q, reply }) => {  
+  try {  
+    if (!q || !q.startsWith("https://")) return reply("❌ Please provide a valid Facebook video URL.");  
 
-    // ✅ Fetching from new API
+    await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });  
+
+    // ✅ Fetch Facebook data via API
     const apiUrl = `https://delirius-apiofc.vercel.app/download/facebook?url=${encodeURIComponent(q)}`;
-    const response = await axios.get(apiUrl);
-    const data = response.data;
+    const res = await axios.get(apiUrl);
+    const data = res.data;
 
-    if (!data || !data.urls || data.urls.length === 0) {
-      return reply("⚠️ *Failed to fetch video data! Please check the link.*");
-    }
+    if (!data?.urls || !data.urls[0]) return reply("⚠️ Couldn't retrieve Facebook media. Please check the link.");  
 
-    const hd = data.urls[0]?.hd;
-    const sd = data.urls[1]?.sd;
-    const title = data.title || "Facebook Video";
-
+    const videoData = data.urls[0];  
+    const thumbnail = videoData.sd || videoData.hd || ""; // use SD or HD as fallback
     const caption = `
-🎬 *WhiteShadow FB Downloader* 📥
+🎬 *Facebook Video Downloader*
 
-📑 *Title:* ${title}
-🔗 *Link:* ${q}
+📖 *Title:* ${data.title || "No Title"}
+🔗 *URL:* ${q}
 
-🔢 *Reply with one of the following numbers:*
+📌 *Reply with number below:*
+1️⃣ SD Quality
+2️⃣ HD Quality
 
-1️⃣ *HD Quality*  
-2️⃣ *SD Quality*
+> ⚡ Powered by *WhiteShadow-MD*
+`;  
 
-> ⚙️ Powered by *WhiteShadow-MD*
-    `;
+    // 📤 Send preview with thumbnail
+    const sentMsg = await conn.sendMessage(from, {
+      image: { url: thumbnail },
+      caption
+    }, { quoted: m });  
 
-    const sentMsg = await conn.sendMessage(from, { text: caption }, { quoted: m });
-    const messageID = sentMsg.key.id;
+    const messageID = sentMsg.key.id;  
 
-    // 🧠 Stable Reply System
-    const onReply = async (msgData) => {
-      const receivedMsg = msgData.messages[0];
-      if (!receivedMsg?.message) return;
+    // 🧠 Store video links temporarily
+    activeReplies.set(messageID, { low: videoData.sd, high: videoData.hd });  
 
-      const receivedText = receivedMsg.message.conversation || receivedMsg.message.extendedTextMessage?.text;
-      const senderID = receivedMsg.key.remoteJid;
-      const contextID = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId;
+    // Auto clear memory after 15s
+    setTimeout(() => activeReplies.delete(messageID), 15000);  
 
-      if (contextID !== messageID) return; // Only handle replies to this message
+  } catch (e) {  
+    console.error("Facebook Command Error:", e);  
+    reply("❌ Error fetching data. Try again later!");  
+  }  
+});  
 
-      await conn.sendMessage(senderID, { react: { text: '⬇️', key: receivedMsg.key } });
+// 🧠 Safe reply handler (global)
+if (!global.FB_REPLY_HANDLER) {
+  global.FB_REPLY_HANDLER = true;
 
-      switch (receivedText.trim()) {
-        case "1":
-          await conn.sendMessage(senderID, {
-            video: { url: hd },
-            caption: "✅ *Downloaded in HD Quality*"
-          }, { quoted: receivedMsg });
-          break;
+  conn.ev.on("messages.upsert", async (msgData) => {  
+    try {  
+      const msg = msgData.messages[0];  
+      if (!msg?.message) return;  
 
-        case "2":
-          await conn.sendMessage(senderID, {
-            video: { url: sd },
-            caption: "✅ *Downloaded in SD Quality*"
-          }, { quoted: receivedMsg });
-          break;
+      const text = msg.message.conversation || msg.message.extendedTextMessage?.text;  
+      const replyTo = msg.message.extendedTextMessage?.contextInfo?.stanzaId;  
+      const sender = msg.key.remoteJid;  
 
-        default:
-          await conn.sendMessage(senderID, { text: "❌ Invalid option! Please reply with 1 or 2." }, { quoted: receivedMsg });
-      }
+      if (activeReplies.has(replyTo)) {  
+        const { low, high } = activeReplies.get(replyTo);  
+        await conn.sendMessage(sender, { react: { text: '⏳', key: msg.key } });  
 
-      // 🧹 Memory-safe cleanup
-      conn.ev.off("messages.upsert", onReply);
-    };
+        switch (text.trim()) {  
+          case "1":  
+            await conn.sendMessage(sender, {  
+              video: { url: low },  
+              caption: "📥 *Downloaded in SD Quality*"  
+            }, { quoted: msg });  
+            break;  
 
-    conn.ev.on("messages.upsert", onReply);
+          case "2":  
+            await conn.sendMessage(sender, {  
+              video: { url: high },  
+              caption: "📥 *Downloaded in HD Quality*"  
+            }, { quoted: msg });  
+            break;  
 
-  } catch (error) {
-    console.error("Facebook Plugin Error:", error);
-    reply("❌ *An error occurred while processing your request.*");
-  }
-});
+          default:  
+            await conn.sendMessage(sender, { text: "❌ Invalid choice! Reply with 1 or 2." }, { quoted: msg });  
+        }  
+
+        activeReplies.delete(replyTo); // clear memory  
+      }  
+    } catch (err) {  
+      console.error("Reply Handler Error:", err);  
+    }  
+  });  
+}

@@ -3,8 +3,8 @@ const { cmd } = require('../command');
 
 cmd({
   pattern: "facebook",
-  alias: ["fb"], 
-  desc: "Download Facebook videos",
+  alias: ["fb"],
+  desc: "Download Facebook videos or images",
   category: "download",
   filename: __filename
 }, async (conn, m, store, { from, q, reply }) => {
@@ -15,60 +15,56 @@ cmd({
 
     await conn.sendMessage(from, { react: { text: '⏳', key: m.key } });
 
-    // ✅ Fetching data from ootaizumi API
+    // Fetch data from API
     const apiUrl = `https://api.ootaizumi.web.id/downloader/facebook?url=${encodeURIComponent(q)}`;
-    const response = await axios.get(apiUrl);
-    const data = response.data;
+    const { data } = await axios.get(apiUrl);
 
-    if (!data?.thumbnail || !data?.downloads) {
+    if (!data?.thumbnail || !data?.downloads?.length) {
       return reply("⚠️ Failed to fetch Facebook video. Check the link and try again.");
     }
 
-    // Filter only video downloads (remove audio)
-    const downloads = data.downloads.filter(d => !d.quality.toLowerCase().includes("mp3") && !d.quality.toLowerCase().includes("audio"));
-
-    if (downloads.length === 0) {
-      return reply("⚠️ No video download options available.");
-    }
+    // Filter out audio only (we keep only video & image)
+    const downloads = data.downloads.filter(d => !d.quality.toLowerCase().includes("audio"));
 
     const caption = `
-📺 *Facebook Video Downloader* 📥
+📺 *Facebook Downloader* 📥
+🔗 Link: ${q}
 
-📑 *Link:* ${q}
+Reply with the number to download:
 
-🔢 *Reply with the number below to download*
+${downloads.map((d, i) => `${i+1}️⃣ ${d.quality}`).join("\n")}
 
-${downloads.map((d, i) => `${i+1}️⃣ ${d.quality}`).join('\n')}
-
-> Powered by WhiteShadow`;
+> Powered by Whiteshadow`;
 
     const sentMsg = await conn.sendMessage(from, {
       image: { url: data.thumbnail },
       caption
     }, { quoted: m });
 
-    const messageID = sentMsg.key.id;
+    const msgID = sentMsg.key.id;
 
-    // 🧠 Interactive Reply System
-    conn.ev.on("messages.upsert", async (msgData) => {
-      const receivedMsg = msgData.messages[0];
+    // Listen for reply
+    conn.ev.on("messages.upsert", async ({ messages }) => {
+      const receivedMsg = messages[0];
       if (!receivedMsg?.message) return;
 
-      const receivedText = receivedMsg.message.conversation || receivedMsg.message.extendedTextMessage?.text;
-      const senderID = receivedMsg.key.remoteJid;
-      const isReplyToBot = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === messageID;
+      const text = receivedMsg.message.conversation || receivedMsg.message.extendedTextMessage?.text;
+      const sender = receivedMsg.key.remoteJid;
+      const isReplyToBot = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === msgID;
 
       if (isReplyToBot) {
-        await conn.sendMessage(senderID, { react: { text: '⏳', key: receivedMsg.key } });
+        await conn.sendMessage(sender, { react: { text: '⏳', key: receivedMsg.key } });
 
-        const index = parseInt(receivedText.trim()) - 1;
+        const index = parseInt(text.trim()) - 1;
         const selected = downloads[index];
 
         if (selected) {
-          await conn.sendMessage(senderID, {
-            video: { url: selected.url },
-            caption: `📥 *Downloaded: ${selected.quality}*`,
-            mimetype: "video/mp4"
+          // Determine type: video or image
+          const type = selected.quality.toLowerCase().includes("jpg") || selected.quality.toLowerCase().includes("image") ? "image" : "video";
+
+          await conn.sendMessage(sender, {
+            [type]: { url: selected.url },
+            caption: `📥 Downloaded: ${selected.quality}`
           }, { quoted: receivedMsg });
         } else {
           reply("❌ Invalid option! Please reply with a valid number from the list.");

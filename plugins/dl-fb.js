@@ -118,52 +118,57 @@ async (conn, mek, m, { from, prefix, q, reply }) => {
 });
 
 
+
 cmd({
   pattern: "facebook",
   react: "🎥",
   alias: ["fbb", "fbvideo", "fb"],
   desc: "Download videos from Facebook",
   category: "download",
-  use: '.facebook <facebook_url>',
+  use: ".facebook <facebook_url>",
   filename: __filename
 },
-async(conn, mek, m, { from, prefix, q, reply }) => {
+async (conn, mek, m, { from, q, reply }) => {
   try {
-    if (!q) return reply("🚩 Please give me a Facebook URL");
+    if (!q) return reply("🚩 Please provide a Facebook URL.");
 
-    // Fetch data from your Vercel API
-    const fb = await fetchJson(`https://facebook-downloader-chamod.vercel.app/api/fb?url=${encodeURIComponent(q)}`);
+    // Replace YOUR_API_KEY with your actual API key
+    const APIKEY = "APIKEY"; 
+    const apiUrl = `https://gtech-api-xtp1.onrender.com/api/download/fb?url=${encodeURIComponent(q)}&apikey=${APIKEY}`;
 
-    if (!fb.download || !fb.download.videos.length) {
-      return reply("❌ I couldn't find any video for this URL.");
+    const res = await axios.get(apiUrl);
+    const json = res.data;
+
+    if (!json.status || !json.data?.data?.length) {
+      return reply("❌ No video found for this URL.");
     }
 
-    // Caption for thumbnail
+    const videoData = json.data.data[0];
+
     let caption = `*WHITESHADOW-MD*
 
-📝 ᴛɪᴛʟᴇ : ${fb.metadata.title}
+📝 ᴛɪᴛʟᴇ : Facebook Video
 🦸‍♀️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : Chamod Nimsara
-🔗 ᴜʀʟ : ${q}`;
+🔗 ᴜʀʟ : ${q}
+🎥 ʀᴇsᴏʟᴜᴛɪᴏɴ : ${videoData.resolution}`;
 
-    // Send thumbnail image
-    if (fb.metadata.thumbnail) {
+    // Send thumbnail if available
+    if (videoData.thumbnail) {
       await conn.sendMessage(from, {
-        image: { url: fb.metadata.thumbnail },
+        image: { url: videoData.thumbnail },
         caption: caption
-      }, mek);
-    }
-
-    // Send all video qualities
-    for (let v of fb.download.videos) {
-      await conn.sendMessage(from, {
-        video: { url: v.link },
-        mimetype: "video/mp4",
-        caption: `*${v.quality}*`
       }, { quoted: mek });
     }
 
+    // Send the video
+    await conn.sendMessage(from, {
+      video: { url: videoData.url },
+      mimetype: "video/mp4",
+      caption: `*Video:* ${videoData.resolution}`
+    }, { quoted: mek });
+
   } catch (err) {
     console.error(err);
-    reply("❌ ERROR: Something went wrong while fetching the video.");
+    reply("❌ ERROR: Could not fetch the Facebook video.");
   }
 });

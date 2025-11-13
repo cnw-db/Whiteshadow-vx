@@ -119,6 +119,7 @@ async (conn, mek, m, { from, prefix, q, reply }) => {
 
 
 
+
 cmd({
   pattern: "facebook",
   react: "🎥",
@@ -130,45 +131,43 @@ cmd({
 },
 async (conn, mek, m, { from, q, reply }) => {
   try {
-    if (!q) return reply("🚩 Please provide a Facebook URL.");
+    if (!q) return reply("🚩 Please provide a valid Facebook video URL.");
 
-    // Replace YOUR_API_KEY with your actual API key
-    const APIKEY = "APIKEY"; 
+    const APIKEY = "APIKEY"; // 🔹 Replace with your actual API key
     const apiUrl = `https://gtech-api-xtp1.onrender.com/api/download/fb?url=${encodeURIComponent(q)}&apikey=${APIKEY}`;
 
-    const res = await axios.get(apiUrl);
-    const json = res.data;
+    const { data } = await axios.get(apiUrl);
 
-    if (!json.status || !json.data?.data?.length) {
-      return reply("❌ No video found for this URL.");
+    // Check if valid
+    if (!data || !data.status || !data.data || !data.data.data || !data.data.data.length) {
+      return reply("❌ I couldn't find any video for this URL.");
     }
 
-    const videoData = json.data.data[0];
-
-    let caption = `*WHITESHADOW-MD*
+    const video = data.data.data[0]; // first video
+    const caption = `*WHITESHADOW-MD*
 
 📝 ᴛɪᴛʟᴇ : Facebook Video
+🎥 ʀᴇsᴏʟᴜᴛɪᴏɴ : ${video.resolution}
 🦸‍♀️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : Chamod Nimsara
-🔗 ᴜʀʟ : ${q}
-🎥 ʀᴇsᴏʟᴜᴛɪᴏɴ : ${videoData.resolution}`;
+🔗 ᴜʀʟ : ${q}`;
 
-    // Send thumbnail if available
-    if (videoData.thumbnail) {
+    // Send thumbnail first
+    if (video.thumbnail) {
       await conn.sendMessage(from, {
-        image: { url: videoData.thumbnail },
+        image: { url: video.thumbnail },
         caption: caption
       }, { quoted: mek });
     }
 
-    // Send the video
+    // Send main video
     await conn.sendMessage(from, {
-      video: { url: videoData.url },
+      video: { url: video.url },
       mimetype: "video/mp4",
-      caption: `*Video:* ${videoData.resolution}`
+      caption: `🎞️ *Resolution:* ${video.resolution}`
     }, { quoted: mek });
 
   } catch (err) {
-    console.error(err);
-    reply("❌ ERROR: Could not fetch the Facebook video.");
+    console.error("Facebook Downloader Error:", err.message);
+    reply("❌ Error: Could not download the Facebook video.\nCheck your API key or URL.");
   }
 });

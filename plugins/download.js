@@ -170,55 +170,63 @@ cmd({
 cmd({
   pattern: "mediafire",
   alias: ["mfire"],
-  desc: "To download MediaFire files.",
+  desc: "To download MediaFire files using Chamod's API.",
   react: "🎥",
   category: "download",
   filename: __filename
-}, async (conn, m, store, {
-  from,
-  quoted,
-  q,
-  reply
-}) => {
+}, async (conn, m, store, { from, quoted, q, reply }) => {
   try {
-    if (!q) {
-      return reply("❌ Please provide a valid MediaFire link.");
-    }
+    if (!q) return reply("❌ Please provide a valid MediaFire link.");
 
-    await conn.sendMessage(from, {
-      react: { text: "⏳", key: m.key }
-    });
+    // show processing react
+    await conn.sendMessage(from, { react: { text: "⏳", key: m.key } });
 
-    const response = await axios.get(`https://www.dark-yasiya-api.site/download/mfire?url=${q}`);
+    // call your Cloudflare Worker (make sure to encode the URL)
+    const apiUrl = `https://mediafire-api.chamodshadow125.workers.dev/?url=${encodeURIComponent(q)}`;
+    const response = await axios.get(apiUrl);
     const data = response.data;
 
-    if (!data || !data.status || !data.result || !data.result.dl_link) {
+    // validate structure based on your JSON
+    if (!data || data.status !== true || !data.result || !data.result.download_url) {
       return reply("⚠️ Failed to fetch MediaFire download link. Ensure the link is valid and public.");
     }
 
-    const { dl_link, fileName, fileType } = data.result;
-    const file_name = fileName || "mediafire_download";
-    const mime_type = fileType || "application/octet-stream";
+    // pull fields exactly as your API returns them
+    const download_url = data.result.download_url;
+    const filename = data.result.filename || "mediafire_download";
+    const filesize = data.result.filesize || "Unknown";
+    const uploaded = data.result.uploaded || "Unknown";
 
-    await conn.sendMessage(from, {
-      react: { text: "⬆️", key: m.key }
-    });
+    // try to detect mime type if mime-types package is available, otherwise fallback
+    let mime_type = "application/octet-stream";
+    try {
+      // if your bot has mime-types installed, uncomment these two lines:
+      // const { lookup } = require('mime-types');
+      // mime_type = lookup(filename) || mime_type;
+    } catch (e) {
+      // ignore and use fallback
+    }
+
+    // react to indicate ready
+    await conn.sendMessage(from, { react: { text: "⬆️", key: m.key } });
 
     const caption = `╭━━━〔 *MEDIAFIRE DOWNLOADER* 〕━━━⊷\n`
-      + `┃▸ *File Name:* ${file_name}\n`
-      + `┃▸ *File Type:* ${mime_type}\n`
+      + `┃▸ *File Name:* ${filename}\n`
+      + `┃▸ *File Size:* ${filesize}\n`
+      + `┃▸ *Uploaded:* ${uploaded}\n`
       + `╰━━━⪼\n\n`
       + `📥 *Downloading your file...*`;
 
+    // send the file to the user (document with remote URL)
     await conn.sendMessage(from, {
-      document: { url: dl_link },
+      document: { url: download_url },
       mimetype: mime_type,
-      fileName: file_name,
+      fileName: filename,
       caption: caption
     }, { quoted: m });
 
   } catch (error) {
-    console.error("Error:", error);
+    console.error("Mediafire command error:", error);
     reply("❌ An error occurred while processing your request. Please try again.");
   }
 });

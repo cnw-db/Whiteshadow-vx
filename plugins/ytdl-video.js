@@ -1,54 +1,27 @@
 const { cmd } = require("../command");
-const yts = require("yt-search");
 const axios = require("axios");
 
 cmd({
   pattern: "video",
-  alias: ["ytmp4","mp4","ytv","vi","v","vid","vide","videos","ytvi","ytvid","ytvide","ytvideos","searchyt","download","get","need","search"],
-  desc: "🎬 Download YouTube videos in MP4 format",
+  alias: ["yt2","ytmp42","mp42","ytv2"],
+  desc: "🎬 Download YouTube video/audio via Izumi API",
   category: "download",
   react: "🎥",
   filename: __filename,
-  use: ".video <video name>"
+  use: ".video2 <YouTube URL>"
 }, async (conn, mek, m, { from, q }) => {
 
   if (!q) {
-    return await conn.sendMessage(from, {
-      text: `⚠️ *Usage:* .video <video name>\n\nExample:\n.video Believer - Imagine Dragons\n\nThis command will search YouTube and let you download videos easily 🎧`
-    }, { quoted: mek });
+    return await conn.sendMessage(from, { text: `⚠️ Usage: .video2 <YouTube URL>\nExample:\n.video2 https://youtu.be/Lubq9sI-IoM` }, { quoted: mek });
   }
 
   try {
-    const search = await yts(q);
-    if (!search.videos.length)
-      return await conn.sendMessage(from, { text: "❌ Sorry, no video found." }, { quoted: mek });
+    const formats = ["360", "720", "1080", "mp3"];
+    let formatText = `🎬 *Select Format for:* ${q}\n\n`;
+    formats.forEach((f, i) => formatText += `「 ${i + 1} 」 ${f}\n`);
 
-    const data = search.videos[0];
-    const ytUrl = data.url;
-
-    // Replace with your actual API key
-    const api = `https://gtech-api-xtp1.onrender.com/api/video/yt?apikey=APIKEY&url=${encodeURIComponent(ytUrl)}`;
-    const { data: apiRes } = await axios.get(api);
-
-    if (!apiRes?.status || !apiRes.result?.media?.video_url) {
-      return await conn.sendMessage(from, { text: "⚠️ Unable to download video right now. Please try again later." }, { quoted: mek });
-    }
-
-    const result = apiRes.result.media;
-
-    const caption = `╭───〔 *🎬 YouTube Video Info* 〕───⬤
-│ 📺 *Title:* ${data.title}
-│ 👤 *Channel:* ${data.author.name}
-│ ⏱️ *Duration:* ${data.timestamp}
-│ 👁️ *Views:* ${data.views}
-│ 🔗 *Link:* ${data.url}
-╰───────────────────────────⬤
-
-Reply with:
-「 1 」▶️ Watch Online
-「 2 」📁 Download File`;
-
-    const sentMsg = await conn.sendMessage(from, { image: { url: result.thumbnail }, caption }, { quoted: mek });
+    // Send initial reply asking format
+    const sentMsg = await conn.sendMessage(from, { text: formatText }, { quoted: mek });
     const replyId = sentMsg.key.id;
 
     const handler = async (msgData) => {
@@ -61,15 +34,32 @@ Reply with:
 
       if (!isReplyToBot) return;
 
-      switch (receivedText.trim()) {
-        case "1":
-          await conn.sendMessage(senderID, { video: { url: result.video_url }, mimetype: "video/mp4", caption: `🎥 *${data.title}*` }, { quoted: receivedMsg });
-          break;
-        case "2":
-          await conn.sendMessage(senderID, { document: { url: result.video_url }, mimetype: "video/mp4", fileName: `${data.title}.mp4` }, { quoted: receivedMsg });
-          break;
-        default:
-          await conn.sendMessage(senderID, { text: "⚠️ Please reply with only *1* or *2*." }, { quoted: receivedMsg });
+      const choice = parseInt(receivedText.trim());
+      if (!choice || choice < 1 || choice > formats.length) {
+        return await conn.sendMessage(senderID, { text: "⚠️ Reply with a valid number from the list!" }, { quoted: receivedMsg });
+      }
+
+      const selectedFormat = formats[choice - 1];
+      const apiUrl = `https://api.ootaizumi.web.id/downloader/youtube?url=${encodeURIComponent(q)}&format=${selectedFormat}`;
+
+      try {
+        const { data } = await axios.get(apiUrl);
+        if (!data?.status || !data?.result) {
+          return await conn.sendMessage(senderID, { text: "❌ Could not download video/audio. Try again later." }, { quoted: receivedMsg });
+        }
+
+        const res = data.result;
+        let caption = `🎬 *Title:* ${res.title}\n👤 *Channel:* ${res.author.channelTitle}\n⏱️ *Duration:* ${res.metadata.duration}\n🔗 *Link:* ${res.url}`;
+
+        if (selectedFormat === "mp3") {
+          await conn.sendMessage(senderID, { audio: { url: res.download }, mimetype: "audio/mpeg", fileName: `${res.title}.mp3`, caption }, { quoted: receivedMsg });
+        } else {
+          await conn.sendMessage(senderID, { video: { url: res.download }, mimetype: "video/mp4", caption }, { quoted: receivedMsg });
+        }
+
+      } catch (e) {
+        console.error("Download error:", e);
+        await conn.sendMessage(senderID, { text: "❌ Error downloading file. Try again later." }, { quoted: receivedMsg });
       }
 
       conn.ev.off("messages.upsert", handler);
@@ -78,7 +68,7 @@ Reply with:
     conn.ev.on("messages.upsert", handler);
 
   } catch (e) {
-    console.error("Video command error:", e);
-    await conn.sendMessage(from, { text: "❌ Something went wrong while downloading the video. Please try again later." }, { quoted: mek });
+    console.error("Video2 command error:", e);
+    await conn.sendMessage(from, { text: "❌ Something went wrong. Try again later." }, { quoted: mek });
   }
 });

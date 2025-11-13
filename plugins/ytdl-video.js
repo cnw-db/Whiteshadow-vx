@@ -1,73 +1,84 @@
-const { cmd } = require('../command');
-const axios = require('axios');
-const yts = require('yt-search');
-
-function extractUrl(text = '') {
-  if (!text) return null;
-  const urlRegex = /(https?:\/\/(?:www\.)?(?:youtube\.com|youtu\.be)\/[\w\-?=&%.#\/]+)|(youtube\.com\/[\w\-?=&%.#\/]+)/i;
-  const match = text.match(urlRegex);
-  if (!match) return null;
-  return match[0].startsWith('http') ? match[0] : `https://${match[0]}`;
-}
+const { cmd } = require("../command");
+const yts = require("yt-search");
+const axios = require("axios");
 
 cmd({
-  pattern: 'video',
-  alias: ['ytmp4', 'mp40'],
-  desc: 'Download YouTube video using Izumi API (auto document fallback).',
-  category: 'download',
-  react: '📥',
-  filename: __filename
-},
-async (conn, mek, m, { from, args, reply, quoted }) => {
+  pattern: "video",
+  alias: ["ytmp4","mp4","ytv","vi","v","vid","vide","videos","ytvi","ytvid","ytvide","ytvideos","searchyt","download","get","need","search"],
+  desc: "🎬 Download YouTube videos in MP4 format",
+  category: "download",
+  react: "🎥",
+  filename: __filename,
+  use: ".video <video name>"
+}, async (conn, mek, m, { from, q }) => {
+
+  if (!q) {
+    return await conn.sendMessage(from, {
+      text: `⚠️ *Usage:* .video <video name>\n\nExample:\n.video Believer - Imagine Dragons\n\nThis command will search YouTube and let you download videos easily 🎧`
+    }, { quoted: mek });
+  }
+
   try {
-    let provided = args.join(' ').trim() || (quoted && (quoted.text || quoted.caption)) || '';
-    let ytUrl = extractUrl(provided);
+    const search = await yts(q);
+    if (!search.videos.length)
+      return await conn.sendMessage(from, { text: "❌ Sorry, no video found." }, { quoted: mek });
 
-    if (!ytUrl) {
-      if (!provided) return reply('🧩 *Usage:* .video <YouTube link or name>\nOr reply to a message with a link.');
-      const search = await yts(provided);
-      if (!search?.all?.length) return reply('❌ No results found.');
-      ytUrl = search.all[0].url;
-      await reply(`🔎 Found: *${search.all[0].title}*\n\n⏳ Fetching video...`);
-    } else {
-      await reply('⏳ Fetching video info...');
+    const data = search.videos[0];
+    const ytUrl = data.url;
+
+    // Replace with your actual API key
+    const api = `https://gtech-api-xtp1.onrender.com/api/video/yt?apikey=APIKEY&url=${encodeURIComponent(ytUrl)}`;
+    const { data: apiRes } = await axios.get(api);
+
+    if (!apiRes?.status || !apiRes.result?.media?.video_url) {
+      return await conn.sendMessage(from, { text: "⚠️ Unable to download video right now. Please try again later." }, { quoted: mek });
     }
 
-    const apiUrl = `https://izumiiiiiiii.dpdns.org/downloader/youtube?url=${encodeURIComponent(ytUrl)}&format=360`;
-    const { data } = await axios.get(apiUrl, { headers: { accept: '*/*' }, timeout: 30000 });
+    const result = apiRes.result.media;
 
-    if (!data?.status || !data?.result?.download)
-      return reply('❌ Failed to fetch download link.');
+    const caption = `╭───〔 *🎬 YouTube Video Info* 〕───⬤
+│ 📺 *Title:* ${data.title}
+│ 👤 *Channel:* ${data.author.name}
+│ ⏱️ *Duration:* ${data.timestamp}
+│ 👁️ *Views:* ${data.views}
+│ 🔗 *Link:* ${data.url}
+╰───────────────────────────⬤
 
-    const { title, thumbnail, metadata, author, download } = data.result;
+Reply with:
+「 1 」▶️ Watch Online
+「 2 」📁 Download File`;
 
-    const caption = `*🎬 ${title}*\n👤 Channel: *${author?.channelTitle || 'Unknown'}*\n👁️ Views: *${metadata?.view || '—'}*\n👍 Likes: *${metadata?.like || '—'}*\n🕓 Duration: *${metadata?.duration || '—'}*\n\n📥 Downloading...`;
+    const sentMsg = await conn.sendMessage(from, { image: { url: result.thumbnail }, caption }, { quoted: mek });
+    const replyId = sentMsg.key.id;
 
-    // 🖼️ Thumbnail preview
-    await conn.sendMessage(from, { image: { url: thumbnail }, caption }, { quoted: m });
+    const handler = async (msgData) => {
+      const receivedMsg = msgData.messages[0];
+      if (!receivedMsg?.message) return;
 
-    // 🎞️ Try sending video first
-    try {
-      await conn.sendMessage(from, {
-        video: { url: download },
-        fileName: `${title.replace(/[\\/:*?"<>|]/g, '')}.mp4`,
-        mimetype: 'video/mp4',
-        caption: `✅ *Downloaded by WhiteShadow-MD*\n🎬 ${title}`
-      }, { quoted: m });
+      const receivedText = receivedMsg.message.conversation || receivedMsg.message.extendedTextMessage?.text;
+      const isReplyToBot = receivedMsg.message.extendedTextMessage?.contextInfo?.stanzaId === replyId;
+      const senderID = receivedMsg.key.remoteJid;
 
-    } catch (err) {
-      // ⚠️ Fallback → send as document
-      await reply(`⚠️ Video too large, sending as document...`);
-      await conn.sendMessage(from, {
-        document: { url: download },
-        mimetype: 'video/mp4',
-        fileName: `${title.replace(/[\\/:*?"<>|]/g, '')}.mp4`,
-        caption: `✅ *Downloaded by WhiteShadow-MD*\n🎬 ${title}`
-      }, { quoted: m });
-    }
+      if (!isReplyToBot) return;
+
+      switch (receivedText.trim()) {
+        case "1":
+          await conn.sendMessage(senderID, { video: { url: result.video_url }, mimetype: "video/mp4", caption: `🎥 *${data.title}*` }, { quoted: receivedMsg });
+          break;
+        case "2":
+          await conn.sendMessage(senderID, { document: { url: result.video_url }, mimetype: "video/mp4", fileName: `${data.title}.mp4` }, { quoted: receivedMsg });
+          break;
+        default:
+          await conn.sendMessage(senderID, { text: "⚠️ Please reply with only *1* or *2*." }, { quoted: receivedMsg });
+      }
+
+      conn.ev.off("messages.upsert", handler);
+    };
+
+    conn.ev.on("messages.upsert", handler);
 
   } catch (e) {
-    console.error('video cmd error =>', e?.message || e);
-    reply('🚫 Error fetching video. Try again later.');
+    console.error("Video command error:", e);
+    await conn.sendMessage(from, { text: "❌ Something went wrong while downloading the video. Please try again later." }, { quoted: mek });
   }
 });

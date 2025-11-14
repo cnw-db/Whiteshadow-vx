@@ -133,41 +133,33 @@ async (conn, mek, m, { from, q, reply }) => {
   try {
     if (!q) return reply("🚩 Please provide a valid Facebook video URL.");
 
-    const APIKEY = "APIKEY"; // 🔹 Replace with your actual API key
-    const apiUrl = `https://gtech-api-xtp1.onrender.com/api/download/fb?url=${encodeURIComponent(q)}&apikey=${APIKEY}`;
-
+    const apiUrl = `https://delirius-apiofc.vercel.app/download/facebook?url=${encodeURIComponent(q)}`;
     const { data } = await axios.get(apiUrl);
 
-    // Check if valid
-    if (!data || !data.status || !data.data || !data.data.data || !data.data.data.length) {
+    if (!data || !data.urls || !data.urls.length) 
       return reply("❌ I couldn't find any video for this URL.");
-    }
 
-    const video = data.data.data[0]; // first video
     const caption = `*WHITESHADOW-MD*
-
-📝 ᴛɪᴛʟᴇ : Facebook Video
-🎥 ʀᴇsᴏʟᴜᴛɪᴏɴ : ${video.resolution}
+📝 ᴛɪᴛʟᴇ : ${data.title}
+🎥 ʀᴇsᴏʟᴜᴛɪᴏɴ : ${data.isHdAvailable ? "HD" : "SD"}
 🦸‍♀️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : Chamod Nimsara
 🔗 ᴜʀʟ : ${q}`;
 
-    // Send thumbnail first
-    if (video.thumbnail) {
-      await conn.sendMessage(from, {
-        image: { url: video.thumbnail },
-        caption: caption
-      }, { quoted: mek });
-    }
-
-    // Send main video
+    // Send thumbnail (if available)
     await conn.sendMessage(from, {
-      video: { url: video.url },
+      image: { url: data.urls[0].hd || data.urls[0].sd },
+      caption: caption
+    }, { quoted: mek });
+
+    // Send HD video if available, else SD
+    await conn.sendMessage(from, {
+      video: { url: data.isHdAvailable ? data.urls[0].hd : data.urls[0].sd },
       mimetype: "video/mp4",
-      caption: `🎞️ *Resolution:* ${video.resolution}`
+      caption: `🎞️ *Resolution:* ${data.isHdAvailable ? "HD" : "SD"}`
     }, { quoted: mek });
 
   } catch (err) {
     console.error("Facebook Downloader Error:", err.message);
-    reply("❌ Error: Could not download the Facebook video.\nCheck your API key or URL.");
+    reply("❌ Error: Could not download the Facebook video.\nCheck the URL.");
   }
 });

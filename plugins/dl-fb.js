@@ -120,6 +120,7 @@ async (conn, mek, m, { from, prefix, q, reply }) => {
 
 
 
+
 cmd({
   pattern: "facebook",
   react: "🎥",
@@ -134,28 +135,31 @@ async (conn, mek, m, { from, q, reply }) => {
     if (!q) return reply("🚩 Please provide a valid Facebook video URL.");
 
     const apiUrl = `https://delirius-apiofc.vercel.app/download/facebook?url=${encodeURIComponent(q)}`;
-    const { data } = await axios.get(apiUrl);
+    const { data: videoData } = await axios.get(apiUrl);
 
-    if (!data || !data.urls || !data.urls.length) 
+    // Validate response
+    if (!videoData || !videoData.urls || !videoData.urls.length)
       return reply("❌ I couldn't find any video for this URL.");
 
+    // Caption
     const caption = `*WHITESHADOW-MD*
-📝 ᴛɪᴛʟᴇ : ${data.title}
-🎥 ʀᴇsᴏʟᴜᴛɪᴏɴ : ${data.isHdAvailable ? "HD" : "SD"}
+📝 ᴛɪᴛʟᴇ : ${videoData.title}
+🎥 ʀᴇsᴏʟᴜᴛɪᴏɴ : ${videoData.isHdAvailable ? "HD" : "SD"}
 🦸‍♀️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : Chamod Nimsara
 🔗 ᴜʀʟ : ${q}`;
 
-    // Send thumbnail (if available)
+    // Send thumbnail (use HD if available)
     await conn.sendMessage(from, {
-      image: { url: data.urls[0].hd || data.urls[0].sd },
+      image: { url: videoData.urls[0].hd || videoData.urls[0].sd },
       caption: caption
     }, { quoted: mek });
 
-    // Send HD video if available, else SD
+    // Send video (HD if available)
+    const videoUrl = videoData.isHdAvailable ? videoData.urls[0].hd : videoData.urls[0].sd;
     await conn.sendMessage(from, {
-      video: { url: data.isHdAvailable ? data.urls[0].hd : data.urls[0].sd },
+      video: { url: videoUrl },
       mimetype: "video/mp4",
-      caption: `🎞️ *Resolution:* ${data.isHdAvailable ? "HD" : "SD"}`
+      caption: `🎞️ *Resolution:* ${videoData.isHdAvailable ? "HD" : "SD"}`
     }, { quoted: mek });
 
   } catch (err) {

@@ -122,48 +122,51 @@ async (conn, mek, m, { from, prefix, q, reply }) => {
 
 
 cmd({
-  pattern: "facebook",
-  react: "🎥",
-  alias: ["fbb", "fbvideo", "fb"],
-  desc: "Download videos from Facebook",
-  category: "download",
-  use: ".facebook <facebook_url>",
-  filename: __filename
+pattern: "facebook",
+react: "🎥",
+alias: ["fbb", "fbvideo", "fb"],
+desc: "Download videos from Facebook",
+category: "download",
+use: '.facebook <facebook_url>',
+filename: __filename
 },
-async (conn, mek, m, { from, q, reply }) => {
-  try {
-    if (!q) return reply("🚩 Please provide a valid Facebook video URL.");
+async(conn, mek, m, { from, prefix, q, reply }) => {
+try {
+if (!q) return reply("🚩 Please give me a Facebook URL");
 
-    const apiUrl = `https://delirius-apiofc.vercel.app/download/facebook?url=${encodeURIComponent(q)}`;
-    const { data: videoData } = await axios.get(apiUrl);
+// Fetch data from your Vercel API  
+const fb = await fetchJson(`https://facebook-downloader.chamodshadow125.workers.dev/api/fb?url=${encodeURIComponent(q)}`);  
 
-    // Validate response
-    if (!videoData || !videoData.urls || !videoData.urls.length)
-      return reply("❌ I couldn't find any video for this URL.");
+if (!fb.download || !fb.download.videos.length) {  
+  return reply("❌ I couldn't find any video for this URL.");  
+}  
 
-    // Caption
-    const caption = `*WHITESHADOW-MD*
-📝 ᴛɪᴛʟᴇ : ${videoData.title}
-🎥 ʀᴇsᴏʟᴜᴛɪᴏɴ : ${videoData.isHdAvailable ? "HD" : "SD"}
+// Caption for thumbnail  
+let caption = `*WHITESHADOW-MD*
+
+📝 ᴛɪᴛʟᴇ : ${fb.metadata.title}
 🦸‍♀️ ᴘᴏᴡᴇʀᴇᴅ ʙʏ : Chamod Nimsara
 🔗 ᴜʀʟ : ${q}`;
 
-    // Send thumbnail (use HD if available)
-    await conn.sendMessage(from, {
-      image: { url: videoData.urls[0].hd || videoData.urls[0].sd },
-      caption: caption
-    }, { quoted: mek });
+// Send thumbnail image  
+if (fb.metadata.thumbnail) {  
+  await conn.sendMessage(from, {  
+    image: { url: fb.metadata.thumbnail },  
+    caption: caption  
+  }, mek);  
+}  
 
-    // Send video (HD if available)
-    const videoUrl = videoData.isHdAvailable ? videoData.urls[0].hd : videoData.urls[0].sd;
-    await conn.sendMessage(from, {
-      video: { url: videoUrl },
-      mimetype: "video/mp4",
-      caption: `🎞️ *Resolution:* ${videoData.isHdAvailable ? "HD" : "SD"}`
-    }, { quoted: mek });
+// Send all video qualities  
+for (let v of fb.download.videos) {  
+  await conn.sendMessage(from, {  
+    video: { url: v.link },  
+    mimetype: "video/mp4",  
+    caption: `*${v.quality}*`  
+  }, { quoted: mek });  
+}
 
-  } catch (err) {
-    console.error("Facebook Downloader Error:", err.message);
-    reply("❌ Error: Could not download the Facebook video.\nCheck the URL.");
-  }
+} catch (err) {
+console.error(err);
+reply("❌ ERROR: Something went wrong while fetching the video.");
+}
 });

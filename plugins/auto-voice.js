@@ -19,34 +19,26 @@ cmd({ on: "body" }, async (conn, mek, msg, { from, body, isOwner }) => {
     if (!body) return;
     const text = body.toLowerCase().trim();
 
-    // Keyword not found → ignore
     if (!data[text]) return;
 
-    // Auto voice disabled → ignore
     if (config.AUTO_VOICE !== "true") return;
-
-    // Owner → ignore
     if (isOwner) return;
 
     const audioUrl = data[text];
 
-    // Validate URL
     if (!/^https?:\/\//i.test(audioUrl)) {
       return conn.sendMessage(from, { text: "❌ Invalid audio URL in JSON." }, { quoted: mek });
     }
 
-    // Detect MIME type
-    let mimeType = audioUrl.endsWith(".m4a") ? "audio/mp4" : "audio/mpeg";
-
-    // Show recording
+    // Show recording status
     await conn.sendPresenceUpdate("recording", from);
 
-    // Send voice (PTT)
+    // Send as OGG OPUS (WhatsApp voice note format)
     await conn.sendMessage(
       from,
       {
         audio: { url: audioUrl },
-        mimetype: mimeType,
+        mimetype: 'audio/ogg; codecs=opus',
         ptt: true
       },
       { quoted: mek }

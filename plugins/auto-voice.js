@@ -2,50 +2,33 @@ const axios = require('axios');
 const config = require("../config");
 const { cmd } = require("../command");
 
-cmd({ on: "body" }, async (conn, mek, msg, { from, body, isOwner }) => {
+cmd({ on: "body" }, async (conn, m, msg, { from, body }) => {
   try {
-
-    // JSON URL
     const jsonUrl = "https://raw.githubusercontent.com/chamod-mv/Whiteshadow-data/refs/heads/main/autovoice.json";
+    const res = await axios.get(jsonUrl);
+    const voiceMap = res.data;
 
-    // Fetch JSON safely
-    const res = await axios.get(jsonUrl).catch(() => null);
-    if (!res || !res.data) {
-      return conn.sendMessage(from, { text: "⚠️ AutoVoice JSON load failed!" }, { quoted: mek });
+    for (const keyword in voiceMap) {
+      if (body.toLowerCase() === keyword.toLowerCase()) {
+        if (config.AUTO_VOICE === "true") {
+          const audioUrl = voiceMap[keyword];
+
+          // Ensure it's a .mp3 or .m4a file
+          if (!audioUrl.endsWith(".mp3") && !audioUrl.endsWith(".m4a")) {
+            return conn.sendMessage(from, { text: "Invalid audio format. Only .mp3 and .m4a supported." }, { quoted: m });
+          }
+
+          await conn.sendPresenceUpdate("recording", from);
+          await conn.sendMessage(from, {
+            audio: { url: audioUrl },
+            mimetype: "audio/mpeg", // This works fine for .mp3 and .m4a
+            ptt: true
+          }, { quoted: m });
+        }
+      }
     }
-
-    const data = res.data;
-
-    if (!body) return;
-    const text = body.toLowerCase().trim();
-
-    if (!data[text]) return;
-
-    if (config.AUTO_VOICE !== "true") return;
-    if (isOwner) return;
-
-    const audioUrl = data[text];
-
-    if (!/^https?:\/\//i.test(audioUrl)) {
-      return conn.sendMessage(from, { text: "❌ Invalid audio URL in JSON." }, { quoted: mek });
-    }
-
-    // Show recording status
-    await conn.sendPresenceUpdate("recording", from);
-
-    // Send as OGG OPUS (WhatsApp voice note format)
-    await conn.sendMessage(
-      from,
-      {
-        audio: { url: audioUrl },
-        mimetype: 'audio/ogg; codecs=opus',
-        ptt: true
-      },
-      { quoted: mek }
-    );
-
   } catch (e) {
-    console.error("AutoVoice Error:", e);
-    return conn.sendMessage(from, { text: "⚠️ AutoVoice Error: " + e.message }, { quoted: mek });
+    console.error("AutoVoice error:", e);
+    return conn.sendMessage(from, { text: "Error fetching voice: " + e.message }, { quoted: m });
   }
 });

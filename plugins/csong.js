@@ -1,8 +1,11 @@
 const { cmd } = require('../command');
-const fetch = require('node-fetch');
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const fs = require('fs');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
+const ffmpegInstaller = require('@ffmpeg-installer/ffmpeg');
+
+ffmpeg.setFfmpegPath(ffmpegInstaller.path);
 
 cmd({
   pattern: 'csong',
@@ -10,40 +13,40 @@ cmd({
   react: '🎶',
   desc: 'Send a YouTube song to a WhatsApp Channel (voice + styled caption)',
   category: 'channel',
-  use: '.csong <song name>/<channel JID>',
+  use: '.csong <songName>/<channelJid>',
   filename: __filename,
 }, async (conn, mek, m, { reply, q, botNumber }) => {
   try {
-    // ─── OWNER + BOT CHECK ───
-    const ownerNumbers = ['94704896880@s.whatsapp.net']; // 👈 your owner number(s)
-    const sender = mek.key?.fromMe ? botNumber : mek.sender;
 
-    if (!ownerNumbers.includes(sender) && sender !== botNumber) {
-      return reply('❌ *This command is restricted to the bot owner and bot number only!*');
+    // ─── OWNER + BOT CHECK ───
+    const ownerNumbers = ['94704896880@s.whatsapp.net']; 
+    const botJid = botNumber + '@s.whatsapp.net';
+    const sender = mek.key?.fromMe ? botJid : mek.sender;
+
+    if (!ownerNumbers.includes(sender) && sender !== botJid) {
+      return reply('❌ *මෙම command එක bot owner සහ bot number වලට පමණි!*');
     }
 
     // ─── ARGUMENT CHECK ───
     if (!q || !q.includes('/')) {
-      return reply(`⚠️ *Usage:*
-      
-🪄 Example:
-.csong Shape of You/120363397446799567@newsletter`);
+      return reply(`⚠️ Usage example:\n.csong Shape of You/120363397446799567@newsletter`);
     }
 
     const [songName, channelJidRaw] = q.split('/').map(x => x.trim());
     const channelJid = channelJidRaw || '';
     if (!channelJid.endsWith('@newsletter')) {
-      return reply('❌ *Invalid Channel JID!* (must end with @newsletter)');
+      return reply('❌ *Channel JID වැරදිය!* (අවසානය @newsletter වන බවට සොයා බලන්න)');
     }
-    if (!songName) return reply('🎵 Please enter a song name.');
+    if (!songName) return reply('🎵 කරුණාකර ගීතයේ නම ඇතුළත් කරන්න.');
 
     // ─── FETCH SONG DATA ───
     const apiUrl = `https://api.nekolabs.my.id/downloader/youtube/play/v1?q=${encodeURIComponent(songName)}`;
     const res = await fetch(apiUrl);
+    if (!res.ok) return reply('❌ API සම්බන්ධතාවය අසාර්ථකයි.');
     const data = await res.json();
 
     if (!data?.success || !data?.result?.downloadUrl) {
-      return reply('❌ Song not found / API error.');
+      return reply('❌ ගීතය සොයාගත නොහැකි විය / API දෝෂයක්.');
     }
 
     const meta = data.result.metadata;
@@ -62,45 +65,35 @@ cmd({
     const caption = `
 ╭───〔 🎧 *NOW PLAYING ON WHITESHADOW MUSIC* 🎶 〕───╮
 │
-│  🎵 *Title:* ${meta.title}
-│  👤 *Artist:* ${meta.channel}
-│  ⏱ *Duration:* ${meta.duration}
-│  🌐 *YouTube:* ${meta.url}
+│  🎵 Title: ${meta.title || "Unknown"}
+│  👤 Artist: ${meta.channel || "Unknown"}
+│  ⏱ Duration: ${meta.duration || "N/A"}
+│  🌐 YouTube: ${meta.url || "N/A"}
 │
-│  💫 Feel the rhythm. Vibe with the beat.
+│  💫 Vibe with the beat!
 │  🎙️ Forwarded from *WHITESHADOW-MD💫* Music Channel
-│
 ╰───────────────────────────────╯
 `;
 
-    const contextInfo = {
-      mentionedJid: sender ? [sender] : [],
-      forwardingScore: 999,
-      isForwarded: true,
-      forwardedNewsletterMessageInfo: {
-        newsletterJid: '120363397446799567@newsletter',
-        newsletterName: '🎵 WHITESHADOW-MD MUSIC 💫',
-        serverMessageId: Math.floor(Date.now() / 1000)
-      }
-    };
-
     // ─── SEND IMAGE CARD ───
     await conn.sendMessage(channelJid, {
-      image: thumb || undefined,
+      image: thumb || null,
       caption,
-      contextInfo
     }, { quoted: mek });
 
-    // ─── TEMP PATHS ───
+    // ─── TEMP FILE PATHS ───
     const tempDir = path.join(__dirname, '../temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
     const mp3Path = path.join(tempDir, `${Date.now()}_ws.mp3`);
     const opusPath = path.join(tempDir, `${Date.now()}_ws.opus`);
 
-    // ─── DOWNLOAD SONG ───
+    // ─── DOWNLOAD AUDIO ───
     const audioRes = await fetch(dlUrl);
-    fs.writeFileSync(mp3Path, Buffer.from(await audioRes.arrayBuffer()));
+    if (!audioRes.ok) return reply('❌ ගීතය download කල නොහැක.');
+    const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+    if (!audioBuffer || audioBuffer.length === 0) return reply('❌ Audio file එක හිස් වෙලා තියෙනවා.');
+    fs.writeFileSync(mp3Path, audioBuffer);
 
     // ─── CONVERT TO OPUS ───
     await new Promise((resolve, reject) => {
@@ -115,22 +108,21 @@ cmd({
 
     const voiceBuffer = fs.readFileSync(opusPath);
 
-    // ─── SEND VOICE ───
+    // ─── SEND VOICE MESSAGE ───
     await conn.sendMessage(channelJid, {
       audio: voiceBuffer,
       mimetype: 'audio/ogg; codecs=opus',
-      ptt: true,
-      contextInfo
+      ptt: true
     }, { quoted: mek });
 
     // ─── CLEANUP ───
     try { fs.unlinkSync(mp3Path); } catch {}
     try { fs.unlinkSync(opusPath); } catch {}
 
-    reply(`✅ *Successfully forwarded "${meta.title}" to ${channelJid}!*`);
+    reply(`✅ *"${meta.title}" සාර්ථකව ${channelJid} වෙත forward කරන ලදි!*`);
 
   } catch (err) {
     console.error('csong error:', err);
-    reply('⚠️ Error while sending song to channel.');
+    reply('⚠️ ගීතය Channel එකට යැවීමේදී දෝෂයක්. නැවත උත්සාහ කරන්න.');
   }
 });

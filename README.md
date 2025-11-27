@@ -54,7 +54,7 @@
 
 ## 🔗 Pairing Link
 
-[![Pair Now](https://img.shields.io/badge/PAIR_CODE-00FFFF?style=for-the-badge&logo=matrix&logoColor=white&labelColor=000000)](https://whiteshadow-x-pair.onrender.com/pair)
+[![Pair Now](https://img.shields.io/badge/PAIR_CODE-00FFFF?style=for-the-badge&logo=matrix&logoColor=white&labelColor=000000)](https://whiteshadow-md-main.onrender.com/pair)
 
 > 🧠 If you face connection issues, try enabling a VPN.
 

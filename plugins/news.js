@@ -42,3 +42,49 @@ async (conn, mek, m, { from, reply }) => {
         reply("Could not fetch news. Please try again later.");
     }
 });
+
+
+
+cmd({
+    pattern: "derana",
+    desc: "Get latest Derana Sinhala News.",
+    category: "news",
+    react: "📰",
+    filename: __filename
+},
+async (conn, mek, m, { from, reply }) => {
+    try {
+        const api = "https://derana.vercel.app/api/derana";
+
+        const res = await axios.get(api);
+        const data = res.data;
+
+        if (!data.status) return reply("⚠️ Unable to fetch Derana News.");
+
+        const news = data.result;
+
+        let caption = `
+📰 *${news.title}*
+📅 ${news.date}
+
+${news.desc}
+
+🔗 *Source:* ${news.url}
+
+© ᴘᴏᴡᴇʀᴇᴅ ʙʏ WHITESHADOW-MD
+`;
+
+        if (news.image) {
+            await conn.sendMessage(from, {
+                image: { url: news.image },
+                caption: caption
+            });
+        } else {
+            await conn.sendMessage(from, { text: caption });
+        }
+
+    } catch (e) {
+        console.error("Derana Plugin Error:", e);
+        reply("❌ Could not fetch Derana news. Try again later.");
+    }
+});

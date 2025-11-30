@@ -88,3 +88,104 @@ ${news.desc}
         reply("❌ Could not fetch Derana news. Try again later.");
     }
 });
+
+
+cmd({
+    pattern: "sinhalanews",
+    desc: "Get latest Sinhala news from Derana & News1st.",
+    category: "news",
+    react: "📰",
+    filename: __filename
+},
+async (conn, mek, m, { from, reply }) => {
+    try {
+        // ===== DERANA NEWS =====
+        const deranaAPI = "https://derana.vercel.app/api/derana";
+        const deranaRes = await axios.get(deranaAPI);
+        const deranaData = deranaRes.data;
+
+        if (deranaData.status) {
+            const news = deranaData.result;
+            let caption = `
+📰 *${news.title}*
+📅 ${news.date}
+
+${news.desc}
+
+🔗 *Source:* ${news.url}
+
+© ᴘᴏᴡᴇʀᴇᴅ ʙʏ WHITESHADOW-MD
+            `;
+            if (news.image) {
+                await conn.sendMessage(from, { image: { url: news.image }, caption });
+            } else {
+                await conn.sendMessage(from, { text: caption });
+            }
+        }
+
+        // ===== NEWS1ST =====
+        const news1stAPI = "https://my-news-api.chamodshadow125.workers.dev/";
+        const news1stRes = await axios.get(news1stAPI);
+        const news1st = news1stRes.data;
+
+        let caption2 = `
+📰 *${news1st.title}*
+📅 ${news1st.date}
+
+${news1st.desc}
+
+🔗 *Source:* ${news1st.url}
+
+© ᴘᴏᴡᴇʀᴇᴅ ʙʏ WHITESHADOW-MD
+        `;
+        if (news1st.image) {
+            await conn.sendMessage(from, { image: { url: news1st.image }, caption: caption2 });
+        } else {
+            await conn.sendMessage(from, { text: caption2 });
+        }
+
+    } catch (e) {
+        console.error("Sinhala News Plugin Error:", e);
+        reply("❌ Could not fetch Sinhala news. Try again later.");
+    }
+});
+
+
+
+
+cmd({
+    pattern: "news1st",
+    alias: ["sirasa"], // ⚡ Alias added here
+    desc: "Get latest News1st Sinhala news.",
+    category: "news",
+    react: "📰",
+    filename: __filename
+},
+async (conn, mek, m, { from, reply }) => {
+    try {
+        const api = "https://my-news-api.chamodshadow125.workers.dev/";
+        const res = await axios.get(api);
+        const news = res.data;
+
+        let caption = `
+📰 *${news.title}*
+📅 ${news.date}
+
+${news.desc}
+
+🔗 *Source:* ${news.url}
+
+© ᴘᴏᴡᴇʀᴇᴅ ʙʏ WHITESHADOW-MD
+        `;
+
+        if (news.image) {
+            await conn.sendMessage(from, { image: { url: news.image }, caption });
+        } else {
+            await conn.sendMessage(from, { text: caption });
+        }
+
+    } catch (e) {
+        console.error("News1st Plugin Error:", e);
+        reply("❌ Could not fetch News1st news. Try again later.");
+    }
+});

@@ -8,8 +8,9 @@
 */
 const { cmd } = require('../command');
 const axios = require("axios");
-const fetch = require("node-fetch");
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const fs = require("fs");
+const FormData = require('form-data');
 
 cmd({
     pattern: "fulldp",
@@ -20,24 +21,27 @@ cmd({
     filename: __filename
 },
 
-async (conn, mek, m, { from, reply, isCreator, quoted, mime }) => {
+async (conn, mek, m, { from, reply, isCreator, quoted }) => {
     try {
+
         if (!isCreator) return reply("⚠️ Only bot owner can change profile picture.");
-        
-        if (!quoted) return reply(`🖼️ *Reply an image with:* .fulldp`);
-        if (!/image/.test(mime)) return reply(`⚠️ Reply to an image only.`);
 
-        // Download image
+        // Check quoted exists
+        if (!quoted) return reply("🖼️ *Reply an image with:* .fulldp");
+
+        // Detect quoted image type correctly
+        let type = quoted.mimetype || quoted.msg?.mimetype || "";
+        if (!type.includes("image")) {
+            return reply("⚠️ Reply to a *valid image* only.");
+        }
+
+        // Download quoted image
         const mediaPath = await conn.downloadAndSaveMediaMessage(quoted);
-
-        // Read file
-        const img = fs.readFileSync(mediaPath);
-
-        // Upload to Catbox for safe link
         const form = new FormData();
-        form.append("fileToUpload", fs.createReadStream(mediaPath));
         form.append("reqtype", "fileupload");
+        form.append("fileToUpload", fs.createReadStream(mediaPath));
 
+        // Upload to Catbox for URL
         const catRes = await fetch("https://catbox.moe/user/api.php", {
             method: "POST",
             body: form
@@ -45,8 +49,9 @@ async (conn, mek, m, { from, reply, isCreator, quoted, mime }) => {
 
         const url = await catRes.text();
 
-        // Apply as profile picture
-        await conn.updateProfilePicture(conn.user.id, await (await fetch(url)).buffer());
+        // Apply profile picture
+        const buffer = await (await fetch(url)).buffer();
+        await conn.updateProfilePicture(conn.user.id, buffer);
 
         reply("✅ *Full-style DP applied successfully!*");
 

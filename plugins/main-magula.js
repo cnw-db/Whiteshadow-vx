@@ -1,4 +1,9 @@
+const { cmd } = require("../command");
 const axios = require("axios");
+const config = require('../config');
+const NodeCache = require("node-cache");
+
+const movieCache = new NodeCache({ stdTTL: 100, checkperiod: 120 });
 
 const movieMap = new Map();
 

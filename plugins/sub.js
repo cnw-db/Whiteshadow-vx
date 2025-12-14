@@ -27,10 +27,10 @@ cmd({
 
     const searchRes = await axios.get(searchUrl);
 
-    // ✅ correct response path
-    const list = searchRes.data?.data?.data || [];
+    // ✅ FINAL CORRECT PATH
+    const list = searchRes.data?.data?.all;
 
-    if (!list.length) {
+    if (!Array.isArray(list) || !list.length) {
       return conn.sendMessage(from, {
         text: "❌ No results found."
       }, { quoted: mek });
@@ -71,22 +71,20 @@ cmd({
 
         if (!movie?.pixeldrainDownloads?.length) {
           return conn.sendMessage(from, {
-            text: "❌ WhatsApp compatible downloads not found."
+            text: "❌ WhatsApp-compatible files not found."
           }, { quoted: msg });
         }
 
-        // ✅ filter ≤2GB only
-        const safeDownloads = movie.pixeldrainDownloads.filter(d => {
-          const size = d.size.toLowerCase();
-          const gb = size.includes("gb")
-            ? parseFloat(size)
-            : parseFloat(size) / 1024;
+        // ✅ ≤ 2GB only
+        const safe = movie.pixeldrainDownloads.filter(d => {
+          const s = d.size.toLowerCase();
+          const gb = s.includes("gb") ? parseFloat(s) : parseFloat(s) / 1024;
           return gb <= 2;
         });
 
-        if (!safeDownloads.length) {
+        if (!safe.length) {
           return conn.sendMessage(from, {
-            text: "⚠️ All files exceed WhatsApp 2GB limit."
+            text: "⚠️ Files exceed WhatsApp 2GB limit."
           }, { quoted: msg });
         }
 
@@ -95,9 +93,9 @@ cmd({
           `⭐ IMDb: ${movie.imdb}\n` +
           `📅 Date: ${movie.date}\n` +
           `🌍 Country: ${movie.country}\n\n` +
-          `📥 *Available Downloads*\n\n`;
+          `📥 *Downloads*\n\n`;
 
-        safeDownloads.forEach((d, i) => {
+        safe.forEach((d, i) => {
           cap += `*${i + 1}.* ${d.quality} — ${d.size}\n`;
         });
 
@@ -110,7 +108,7 @@ cmd({
 
         movieMap.set(infoMsg.key.id, {
           title: movie.title,
-          downloads: safeDownloads
+          downloads: safe
         });
       }
 
@@ -137,10 +135,10 @@ cmd({
 
     conn.ev.on("messages.upsert", listener);
 
-  } catch (err) {
-    console.log(err);
+  } catch (e) {
+    console.log(e);
     await conn.sendMessage(from, {
-      text: `❌ *Error:* ${err.message}`
+      text: "❌ API Error"
     }, { quoted: mek });
   }
 });

@@ -3,106 +3,144 @@ const axios = require("axios");
 const NodeCache = require("node-cache");
 
 const movieCache = new NodeCache({ stdTTL: 300 });
-
-/*
-COMMANDS
-.sublk <movie name>        -> search
-.sublkdl <number>          -> download
-*/
+const movieMap = new Map();
 
 cmd({
   pattern: "sublk",
   alias: ["sub"],
-  react: "🎬",
-  desc: "Search Sinhala subtitle movies (sub.lk)",
-  category: "movie",
-  use: ".sublk <movie name>",
+  desc: "🎬 Sinhala Sub Movies (Sub.lk)",
+  category: "media",
+  react: "🎥",
   filename: __filename
-},
-async (conn, mek, m, { from, args, reply }) => {
+}, async (conn, mek, m, { from, q }) => {
+
+  if (!q) {
+    return conn.sendMessage(from, {
+      text: "❌ *Use:* .sublk <movie name>"
+    }, { quoted: mek });
+  }
+
   try {
-    if (!args.length) return reply("❌ Movie name ekak denna\n\nExample:\n.sublk new");
+    /* 🔍 SEARCH */
+    const searchUrl =
+      `https://darkyasiya-new-movie-api.vercel.app/api/movie/sublk/search?q=${encodeURIComponent(q)}`;
 
-    const query = args.join(" ");
-    const searchUrl = `https://darkyasiya-new-movie-api.vercel.app/api/movie/sublk/search?q=${encodeURIComponent(query)}`;
+    const searchRes = await axios.get(searchUrl);
 
-    const res = await axios.get(searchUrl);
-    const list = res.data?.data?.movies || res.data?.data?.all;
+    // ✅ correct response path
+    const list = searchRes.data?.data?.data || [];
 
-    if (!list || list.length === 0) {
-      return reply("❌ No results found.");
+    if (!list.length) {
+      return conn.sendMessage(from, {
+        text: "❌ No results found."
+      }, { quoted: mek });
     }
 
-    let text = `🎬 *SUB.LK SEARCH RESULTS*\n\n`;
-    let store = [];
-
-    list.slice(0, 10).forEach((m, i) => {
-      text += `*${i + 1}.* ${m.title}\n⭐ IMDb: ${m.imdb}\n📅 Year: ${m.year}\n\n`;
-      store.push({
-        title: m.title,
-        link: m.link
-      });
+    let txt = "🔢 *Reply with movie number*\n━━━━━━━━━━━━━━━\n\n";
+    list.forEach((m, i) => {
+      txt += `*${i + 1}.* ${m.title}\n`;
     });
 
-    movieCache.set(from, store);
-
-    text += `📥 Download කරන්න:\n*.sublkdl <number>*\n\nExample:\n.sublkdl 1`;
-
-    await reply(text);
-
-  } catch (e) {
-    console.log(e);
-    reply("❌ Error fetching movies.");
-  }
-});
-
-
-cmd({
-  pattern: "sublkdl",
-  react: "⬇️",
-  desc: "Download Sinhala subtitle movie",
-  category: "movie",
-  use: ".sublkdl <number>",
-  filename: __filename
-},
-async (conn, mek, m, { from, args, reply }) => {
-  try {
-    if (!args.length) return reply("❌ Number ekak denna");
-
-    const cache = movieCache.get(from);
-    if (!cache) return reply("❌ Search eka expire wela. Ayeth search karanna.");
-
-    const index = parseInt(args[0]) - 1;
-    if (!cache[index]) return reply("❌ Invalid number");
-
-    const movie = cache[index];
-
-    const dlApi = `https://movanest.zone.id/v2/sublk?url=${encodeURIComponent(movie.link)}`;
-    const res = await axios.get(dlApi);
-
-    if (!res.data || !res.data.result) {
-      return reply("❌ Download link fetch karanna bari una.");
-    }
-
-    const data = res.data.result;
-
-    let caption = `🎬 *${movie.title}*\n\n`;
-    caption += `📁 Size: ${data.size || "Unknown"}\n`;
-    caption += `🎞 Quality: ${data.quality || "HD"}\n`;
-    caption += `🌐 Source: sub.lk\n\n`;
-    caption += `⬇️ Downloading...`;
-
-    await reply(caption);
-
-    // REAL MOVIE FILE SEND (≤2GB WhatsApp limit)
-    await conn.sendMessage(from, {
-      document: { url: data.download },
-      mimetype: "video/mp4",
-      fileName: `${movie.title}.mp4`
+    const sentMsg = await conn.sendMessage(from, {
+      text: `🎬 *SUB.LK SEARCH*\n\n${txt}\n\n> Powered by WHITESHADOW-MD`
     }, { quoted: mek });
 
-  } catch (e) {
-    console.log(e);
-    reply("❌ Movie send karaddi error ekak.");
+    const listener = async (update) => {
+      const msg = update.messages?.[0];
+      if (!msg?.message?.extendedTextMessage) return;
+
+      const replyText = msg.message.extendedTextMessage.text.trim();
+      const repliedId =
+        msg.message.extendedTextMessage.contextInfo?.stanzaId;
+
+      /* 🎬 MOVIE SELECT */
+      if (repliedId === sentMsg.key.id) {
+        const num = parseInt(replyText);
+        const selected = list[num - 1];
+        if (!selected) return;
+
+        await conn.sendMessage(from, {
+          react: { text: "🎯", key: msg.key }
+        });
+
+        const movieUrl =
+          `https://movanest.zone.id/v2/sublk?url=${encodeURIComponent(selected.link)}`;
+
+        const movieRes = await axios.get(movieUrl);
+        const movie = movieRes.data;
+
+        if (!movie?.pixeldrainDownloads?.length) {
+          return conn.sendMessage(from, {
+            text: "❌ WhatsApp compatible downloads not found."
+          }, { quoted: msg });
+        }
+
+        // ✅ filter ≤2GB only
+        const safeDownloads = movie.pixeldrainDownloads.filter(d => {
+          const size = d.size.toLowerCase();
+          const gb = size.includes("gb")
+            ? parseFloat(size)
+            : parseFloat(size) / 1024;
+          return gb <= 2;
+        });
+
+        if (!safeDownloads.length) {
+          return conn.sendMessage(from, {
+            text: "⚠️ All files exceed WhatsApp 2GB limit."
+          }, { quoted: msg });
+        }
+
+        let cap =
+          `🎬 *${movie.title}*\n\n` +
+          `⭐ IMDb: ${movie.imdb}\n` +
+          `📅 Date: ${movie.date}\n` +
+          `🌍 Country: ${movie.country}\n\n` +
+          `📥 *Available Downloads*\n\n`;
+
+        safeDownloads.forEach((d, i) => {
+          cap += `*${i + 1}.* ${d.quality} — ${d.size}\n`;
+        });
+
+        cap += "\n🔢 *Reply with quality number*";
+
+        const infoMsg = await conn.sendMessage(from, {
+          image: { url: movie.image },
+          caption: cap
+        }, { quoted: msg });
+
+        movieMap.set(infoMsg.key.id, {
+          title: movie.title,
+          downloads: safeDownloads
+        });
+      }
+
+      /* 📥 QUALITY SELECT */
+      else if (movieMap.has(repliedId)) {
+        const { title, downloads } = movieMap.get(repliedId);
+        const num = parseInt(replyText);
+        const chosen = downloads[num - 1];
+        if (!chosen) return;
+
+        await conn.sendMessage(from, {
+          react: { text: "📥", key: msg.key }
+        });
+
+        await conn.sendMessage(from, {
+          document: { url: chosen.finalDownloadUrl },
+          mimetype: "video/mp4",
+          fileName: `${title} - ${chosen.quality}.mp4`,
+          caption:
+            `🎬 *${title}*\n🎥 ${chosen.quality}\n\n> Powered by WHITESHADOW-MD`
+        }, { quoted: msg });
+      }
+    };
+
+    conn.ev.on("messages.upsert", listener);
+
+  } catch (err) {
+    console.log(err);
+    await conn.sendMessage(from, {
+      text: `❌ *Error:* ${err.message}`
+    }, { quoted: mek });
   }
 });

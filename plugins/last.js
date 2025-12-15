@@ -86,7 +86,7 @@ cmd({
 ${songText}`
         }),
         footer: proto.Message.InteractiveMessage.Footer.fromObject({
-          text: "WHITESHADOW LITE 𝐁𝙾𝚃"
+          text: "WHITESHADOW MD"
         }),
         header: proto.Message.InteractiveMessage.Header.fromObject({
           title: song.albumName || "Lyrics Result",

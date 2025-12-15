@@ -1,97 +1,58 @@
-const fs = require("fs");
-const path = require("path");
 const { cmd } = require("../command");
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 
-const banFile = path.join(__dirname, "../lib/ban.json");
+const styles = ['photorealistic', 'digital-art', 'impressionist', 'anime', 'fantasy', 'sci-fi', 'vintage'];
 
-function loadBans() {
-    if (!fs.existsSync(banFile)) fs.writeFileSync(banFile, "[]");
-    return JSON.parse(fs.readFileSync(banFile, "utf-8"));
-}
-
-function saveBans(banned) {
-    fs.writeFileSync(banFile, JSON.stringify([...new Set(banned)], null, 2));
-}
-
-// ✅ Ban Command
 cmd({
-    pattern: "ban",
-    alias: ["blockuser", "addban"],
-    desc: "Ban a user from using the bot",
-    category: "owner",
-    react: "⛔",
-    filename: __filename
-}, async (conn, mek, m, { from, args, isCreator, reply }) => {
-    if (!isCreator) return reply("_❗Only the bot owner can use this command!_");
+    pattern: 'aiimg ?(.*)',
+    desc: 'Generate AI image with prompt & style (choose style via buttons)',
+    sucReact: "🤖",
+    category: "AI",
+    async handler(m, { text, client }) {
+        if (!text) return m.reply("Usage: .aiimg <prompt>\nThen select style from buttons.");
 
-    let target = m.mentionedJid?.[0] 
-        || (m.quoted?.sender ?? null)
-        || (args[0]?.replace(/[^0-9]/g, '') + "@s.whatsapp.net");
+        const prompt = text.trim();
 
-    if (!target || !target.includes("@s.whatsapp.net")) return reply("❌ Please tag, reply, or provide a valid number.");
+        // Create style buttons
+        const buttons = styles.map(style => ({
+            buttonId: `aiimgbtn|${prompt}|${style}`,
+            buttonText: { displayText: style },
+            type: 1
+        }));
 
-    let banned = loadBans();
+        const buttonMessage = {
+            text: `✨ *Select Style for:* ${prompt}`,
+            buttons,
+            headerType: 1
+        };
 
-    if (banned.includes(target)) return reply("❌ This user is already banned.");
-
-    banned.push(target);
-    saveBans(banned);
-
-    await conn.sendMessage(from, {
-        image: { url: "https://files.catbox.moe/fnmvlq.jpg" },
-        caption: `⛔ *User has been banned from using the bot.*\n\n👤 *ID:* ${target}`
-    }, { quoted: mek });
+        await client.sendMessage(m.from, buttonMessage, { quoted: m });
+    }
 });
 
-// ✅ Unban Command
+// Button handler
 cmd({
-    pattern: "unban",
-    alias: ["removeban"],
-    desc: "Unban a user",
-    category: "owner",
-    react: "✅",
-    filename: __filename
-}, async (conn, mek, m, { from, args, isCreator, reply }) => {
-    if (!isCreator) return reply("_❗Only the bot owner can use this command!_");
+    pattern: 'aiimgbtn\\|(.*)\\|(.*)',
+    fromMe: true,
+    desc: 'Handle AI image button press',
+    async handler(m, { client, match }) {
+        const [_, prompt, style] = match;
 
-    let target = m.mentionedJid?.[0] 
-        || (m.quoted?.sender ?? null)
-        || (args[0]?.replace(/[^0-9]/g, '') + "@s.whatsapp.net");
+        try {
+            const url = `https://ai-pic-whiteshadow.vercel.app/api/unrestrictedai?prompt=${encodeURIComponent(prompt)}&style=${encodeURIComponent(style)}`;
+            const res = await fetch(url);
+            const data = await res.json();
 
-    if (!target || !target.includes("@s.whatsapp.net")) return reply("❌ Please tag, reply, or provide a valid number.");
+            if (!data.status) return m.reply("❌ Failed to generate image.");
 
-    let banned = loadBans();
+            await client.sendMessage(m.from, {
+                image: { url: data.result },
+                caption: `✨ *AI Image Generated*\n• Prompt: ${data.prompt}\n• Style: ${data.style}\n• Creator: ${data.creator}`
+            }, { quoted: m });
 
-    if (!banned.includes(target)) return reply("❌ This user is not banned.");
-
-    saveBans(banned.filter(u => u !== target));
-
-    await conn.sendMessage(from, {
-        image: { url: "https://files.catbox.moe/fnmvlq.jpg" },
-        caption: `✅ *User has been unbanned.*\n\n👤 *ID:* ${target}`
-    }, { quoted: mek });
-});
-
-// ✅ List Ban Command
-cmd({
-    pattern: "listban",
-    alias: ["banlist", "bannedusers"],
-    desc: "List all banned users",
-    category: "owner",
-    react: "📋",
-    filename: __filename
-}, async (conn, mek, m, { from, isCreator, reply }) => {
-    if (!isCreator) return reply("_❗Only the bot owner can use this command!_");
-
-    let banned = loadBans();
-
-    if (banned.length === 0) return reply("✅ No banned users found.");
-
-    let msg = "⛔ *Banned Users List:*\n\n";
-    msg += banned.map((id, i) => `${i + 1}. wa.me/${id.replace("@s.whatsapp.net", "")}`).join("\n");
-
-    await conn.sendMessage(from, {
-        image: { url: "https://files.catbox.moe/fnmvlq.jpg" },
-        caption: msg
-    }, { quoted: mek });
+        } catch (err) {
+            console.log(err);
+            m.reply("❌ Error generating AI image.");
+        }
+    }
 });

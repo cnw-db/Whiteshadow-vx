@@ -1,74 +1,101 @@
 const fetch = require('node-fetch');
 const { cmd } = require('../command');
 
+// 🔐 OWNER ONLY API KEY
+const OWNER_API_KEY = "e149763832f5b3ac04fcc5fa3007a328fbb60b2e09f798398f14120b0d4bd29e";
+
 cmd({
     pattern: "reactch",
-    alias: ["rch", "reactchannel"],
-    desc: "Send emoji reaction to WhatsApp Channel (user API key)",
-    category: "tools",
+    alias: ["rch"],
+    desc: "Owner only multi emoji react to WhatsApp Channel",
+    category: "owner",
     react: "⚡",
     filename: __filename
-}, async (conn, m, text) => {
+}, async (conn, m) => {
     try {
-        if (!text) {
+        // 👑 OWNER CHECK
+        if (!m.isOwner) {
+            return m.reply("❌ This command is *Owner Only*");
+        }
+
+        // ✅ SAFE TEXT READ
+        const text =
+            m.text ||
+            m.message?.conversation ||
+            m.message?.extendedTextMessage?.text ||
+            "";
+
+        const args = text.trim().split(/\s+/).slice(1);
+
+        if (args.length < 2) {
             return m.reply(
 `❌ Usage:
-.reactch <API_KEY> <CHANNEL_LINK> <EMOJI>
+.reactch <CHANNEL_LINK> <EMOJI1>|<EMOJI2>|<EMOJI3>
 
 📌 Example:
-.reactch APIKEY_dapiya https://whatsapp.com/channel/xxxx 🔥`
+.reactch https://whatsapp.com/channel/xxxx 🔥|😍|😂`
             );
         }
 
-        const args = text.split(" ");
+        const channelLink = args[0];
+        const emojiText = args.slice(1).join(" ");
+        const emojis = emojiText.split("|").map(e => e.trim()).filter(Boolean);
 
-        const apiKey = args[0];
-        const channelLink = args[1];
-        const emoji = args.slice(2).join(" ");
-
-        if (!apiKey || !channelLink || !emoji) {
-            return m.reply("⚠️ API key, channel link සහ emoji එකත් දෙන්න!");
+        if (emojis.length === 0) {
+            return m.reply("⚠️ Emoji එකක්වත් හම්බුනේ නෑ");
         }
 
-        const ENCODED_LINK_CH = encodeURIComponent(channelLink);
-        const ENCODED_EMOJI = encodeURIComponent(emoji);
+        let success = 0;
+        let failed = 0;
 
-        const url = `https://react.whyux-xec.my.id/api/rch?link=${ENCODED_LINK_CH}&emoji=${ENCODED_EMOJI}`;
+        for (const emoji of emojis) {
+            const url = `https://react.whyux-xec.my.id/api/rch?link=${encodeURIComponent(channelLink)}&emoji=${encodeURIComponent(emoji)}`;
 
-        const headers = {
-            "x-api-key": apiKey
-        };
+            try {
+                const res = await fetch(url, {
+                    method: "GET",
+                    headers: {
+                        "x-api-key": OWNER_API_KEY
+                    }
+                });
 
-        const response = await fetch(url, {
-            method: "GET",
-            headers
-        });
+                const raw = await res.text();
+                let result;
 
-        const raw = await response.text();
-        let result;
+                try {
+                    result = JSON.parse(raw);
+                } catch {
+                    console.log("RAW API RESPONSE:", raw);
+                    failed++;
+                    continue;
+                }
 
-        try {
-            result = JSON.parse(raw);
-        } catch (e) {
-            console.log("RAW RESPONSE:", raw);
-            return m.reply("⚠️ API response invalid");
+                if (result && result.success === true) {
+                    success++;
+                } else {
+                    failed++;
+                }
+
+                // ⏳ small delay (API safe)
+                await new Promise(r => setTimeout(r, 700));
+
+            } catch (e) {
+                console.error("REACT ERROR:", e);
+                failed++;
+            }
         }
 
-        if (result && result.success === true) {
-            return m.reply(
-`✅ *React Sent Successfully!*
+        return m.reply(
+`✅ *Multi React Finished*
 ━━━━━━━━━━━━━━
 🔗 Channel: ${channelLink}
-🌟 Emoji: ${emoji}`
-            );
-        } else {
-            console.error("API ERROR:", result);
-            const errMsg = result?.error || "ukana react";
-            return m.reply(`⚠️ ${errMsg}`);
-        }
+🎯 Success: ${success}
+❌ Failed: ${failed}
+✨ Emojis: ${emojis.join(" ")}`
+        );
 
     } catch (err) {
-        console.error("FETCH ERROR:", err);
-        return m.reply("⚠️ API na bang! 🙄");
+        console.error("REACTCH ERROR:", err);
+        return m.reply("⚠️ Something went wrong");
     }
 });

@@ -2,7 +2,8 @@ const axios = require("axios");
 const { cmd } = require("../command");
 const {
   proto,
-  generateWAMessageFromContent
+  generateWAMessageFromContent,
+  prepareWAMessageMedia
 } = require("@whiskeysockets/baileys");
 
 /* ───── Fake Meta Quote ───── */
@@ -34,8 +35,11 @@ async function searchLyrics(query) {
   const url = `https://lyrics-api.chamodshadow125.workers.dev/?title=${encodeURIComponent(query)}`;
   const { data } = await axios.get(url);
   if (!data?.status || !data?.data?.length) return null;
-  return data.data.slice(0, 5); // max 5 cards
+  return data.data.slice(0, 5); // up to 5 cards
 }
+
+/* ───── Image Header Source ───── */
+const HEADER_IMAGE = "https://files.catbox.moe/6kmrjw.jpg";
 
 /* ───── Command ───── */
 cmd({
@@ -63,34 +67,38 @@ cmd({
       return reply("❌ Lyrics not found.");
     }
 
-    const cards = results.map(song => {
-      const durationMin = Math.floor(song.duration / 60);
-      const durationSec = song.duration % 60;
+    const cards = await Promise.all(results.map(async (song) => {
+      const songText = song.plainLyrics
+        ? song.plainLyrics.slice(0, 500) + "..."
+        : "Lyrics unavailable";
+
+      const media = await prepareWAMessageMedia(
+        { image: { url: HEADER_IMAGE } },
+        { upload: conn.waUploadToServer }
+      );
 
       return {
         body: proto.Message.InteractiveMessage.Body.fromObject({
           text:
 `🎧 *${song.trackName}*
 🎤 ${song.artistName}
-⏱️ ${durationMin}:${durationSec.toString().padStart(2, "0")}
-
-${song.plainLyrics
-  ? song.plainLyrics.slice(0, 600) + "..."
-  : "Lyrics not available"}`
+──────────────────
+${songText}`
         }),
         footer: proto.Message.InteractiveMessage.Footer.fromObject({
           text: "WHITESHADOW LITE 𝐁𝙾𝚃"
         }),
         header: proto.Message.InteractiveMessage.Header.fromObject({
           title: song.albumName || "Lyrics Result",
-          hasMediaAttachment: false
+          hasMediaAttachment: true,
+          imageMessage: media.imageMessage
         }),
         nativeFlowMessage:
           proto.Message.InteractiveMessage.NativeFlowMessage.fromObject({
             buttons: []
           })
       };
-    });
+    }));
 
     const msg = generateWAMessageFromContent(from, {
       viewOnceMessage: {

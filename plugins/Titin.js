@@ -1,24 +1,21 @@
 const fetch = require('node-fetch');
 const { cmd } = require('../command');
 
-// 🔐 API KEY (hidden, fixed)
+// 🔐 API KEY (hidden)
 const BOT_API_KEY = "e149763832f5b3ac04fcc5fa3007a328fbb60b2e09f798398f14120b0d4bd29e";
 
 cmd({
     pattern: "reactch",
     alias: ["rch"],
-    desc: "Bot number only multi react to channel",
+    desc: "Bot self only multi react",
     category: "owner",
     filename: __filename
 }, async (conn, m) => {
     try {
-        // 🤖 BOT NUMBER CHECK
-        const botJid = conn.user?.id;        // bot@s.whatsapp.net
-        if (m.sender !== botJid) {
-            return; // ❌ silent ignore (no reply)
-        }
+        // ✅ BOT SELF CHECK (CORRECT)
+        if (!m.fromMe) return; // bot msg not sent → ignore
 
-        // 🧠 FORCE TEXT READ
+        // ✅ READ TEXT SAFELY
         const fullText =
             m.text ||
             m.message?.conversation ||
@@ -66,7 +63,7 @@ cmd({
                 try {
                     json = JSON.parse(raw);
                 } catch {
-                    console.log("RAW:", raw);
+                    console.log("RAW API:", raw);
                     failed++;
                     continue;
                 }
@@ -74,7 +71,7 @@ cmd({
                 if (json.success === true) success++;
                 else failed++;
 
-                // ⏳ anti-spam delay
+                // ⏳ safe delay
                 await new Promise(r => setTimeout(r, 600));
 
             } catch (e) {
@@ -94,5 +91,6 @@ cmd({
 
     } catch (err) {
         console.error("REACTCH FATAL:", err);
+        return m.reply("⚠️ React command crashed");
     }
 });

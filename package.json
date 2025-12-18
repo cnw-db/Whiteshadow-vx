@@ -9,7 +9,7 @@
     "restart": "pm2 restart WHITESHADOW-MD"
   },
   "dependencies": {
-    "@whiskeysockets/baileys": "npm:@lunabotv6/luna-baileys@7.3.4",
+    "@whiskeysockets/baileys": "npm:@fuxxy-star/baileys",
     "@adiwajshing/keyed-db": "latest",
     "@dark-yasiya/yt-dl.js": "1.0.5",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
@@ -17,7 +17,7 @@
     "pino": "^9.5.0",
     "pm2": "^6.0.8",
     "util": "^0.12.5",
-    "jimp": "^0.22.12",
+    "jimp": "^0.16.1",
     "express": "latest",
     "moment-timezone": "^0.6.0",
     "axios": "^1.10.0",

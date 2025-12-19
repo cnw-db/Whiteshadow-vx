@@ -257,7 +257,7 @@ async (conn, mek, m, { reply }) => {
             minute: "2-digit", 
             second: "2-digit", 
             hour12: true,
-            timeZone: "Asia/Karachi" // Setting Pakistan's time zone explicitly
+            timeZone: "Asia/Colombo" // Setting Pakistan's time zone explicitly
         });
         
         // Send the local time as reply

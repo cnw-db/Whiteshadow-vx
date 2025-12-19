@@ -4,18 +4,15 @@
   "description": "⚡ A WhatsApp Bot Engine by WhiteShado",
   "main": "index.js",
   "scripts": {
-    "start": "pm2 start index.js --deep-monitoring --attach --name WHITESHADOW-MD",
-    "stop": "pm2 stop WHITESHADOW-MD",
-    "restart": "pm2 restart WHITESHADOW-MD"
+    "start": "node index.js"
   },
   "dependencies": {
     "@whiskeysockets/baileys": "npm:@fuxxy-star/baileys",
     "@adiwajshing/keyed-db": "latest",
     "@dark-yasiya/yt-dl.js": "1.0.5",
     "@ffmpeg-installer/ffmpeg": "^1.1.0",
-    "@vitalets/google-translate-api": "^9.2.1",   
+    "@vitalets/google-translate-api": "^9.2.1",
     "pino": "^9.5.0",
-    "pm2": "^6.0.8",
     "util": "^0.12.5",
     "jimp": "^0.16.1",
     "express": "latest",
@@ -42,12 +39,12 @@
     "vm": "^0.1.0",
     "adm-zip": "^0.5.16",
     "cheerio": "^1.0.0-rc.12",
-    "ruhend-scraper" : "8.0.3",
+    "ruhend-scraper": "8.0.3",
     "qrcode-terminal": "^0.12.0",
-    "yt-search":"2.13.1",
+    "yt-search": "2.13.1",
     "sequelize": "^6.37.5",
     "sqlite3": "^5.1.7",
     "dotenv": "^16.5.0",
-    "api-dylux":"latest"
+    "api-dylux": "latest"
   }
 }

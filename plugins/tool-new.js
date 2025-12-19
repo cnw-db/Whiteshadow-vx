@@ -261,7 +261,7 @@ async (conn, mek, m, { reply }) => {
         });
         
         // Send the local time as reply
-        reply(`🕒 Current Local Time in Pakistan: ${localTime}`);
+        reply(`🕒 Current Local Time in Srilanka: ${localTime}`);
     } catch (e) {
         console.error("Error in .timenow command:", e);
         reply("❌ An error occurred. Please try again later.");

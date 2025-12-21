@@ -11,39 +11,56 @@ cmd({
   react: '✨',
   filename: __filename
 }, async (conn, m, store, { from, q, reply, quoted }) => {
+  let tempPath
   try {
-    // 1️⃣ Validate input
-    if(!quoted || !quoted.imageMessage) 
-      return reply('❌ Reply to an image with your prompt!')
+    let imageBuffer
 
-    if(!q) return reply('❌ Please provide a prompt!')
+    // 1️⃣ Validate input: quoted image or URL
+    if(quoted && quoted.message && quoted.message.imageMessage){
+      try {
+        imageBuffer = await conn.downloadMediaMessage(quoted)
+      } catch(e){
+        return reply('❌ Cannot download image, try again. Error: ' + e.message)
+      }
+    } else if(q && q.startsWith('http')){
+      try {
+        const response = await axios.get(q, { responseType:'arraybuffer' })
+        imageBuffer = Buffer.from(response.data, 'binary')
+      } catch(e){
+        return reply('❌ Cannot download image from URL. Error: ' + e.message)
+      }
+    } else {
+      return reply('❌ Reply to an image or send a valid image URL with prompt!')
+    }
 
-    const prompt = q
-    const imageBuffer = await conn.downloadMediaMessage(quoted)
-    const tempPath = `/tmp/temp-${Date.now()}.jpg`
+    // 2️⃣ Check prompt
+    if(!q) return reply('❌ Please provide a prompt for enhancement!')
+
+    // 3️⃣ Save temp image
+    tempPath = `/tmp/temp-${Date.now()}.jpg`
     fs.writeFileSync(tempPath, imageBuffer)
 
-    // 2️⃣ Prepare FormData
+    // 4️⃣ Prepare form-data
     const formData = new FormData()
     formData.append('image', fs.createReadStream(tempPath))
-    formData.append('prompt', prompt)
+    formData.append('prompt', q)
 
     const apiKey = process.env.API_KEY || 'WHITESHADOW-123456'
     const apiURL = 'https://nanobanana-api-whiteshadow.vercel.app/api/enhance'
 
-    // 3️⃣ Axios POST request with timeout
+    // 5️⃣ Call API with timeout
     const res = await axios.post(apiURL, formData, {
       headers: {
         'x-api-key': apiKey,
         ...formData.getHeaders()
       },
-      timeout: 60000 // 60s
+      timeout: 60000
     })
 
-    // 4️⃣ Remove temp file safely
+    // 6️⃣ Delete temp file
     fs.unlinkSync(tempPath)
 
-    // 5️⃣ Send enhanced image
+    // 7️⃣ Send enhanced image
     if(res.data.status){
       conn.sendMessage(from, {
         image: { url: res.data.result.output },
@@ -54,8 +71,7 @@ cmd({
     }
 
   } catch(e){
-    // 6️⃣ Catch any error to prevent crash
     reply('❌ Error: ' + e.message)
-    try { fs.unlinkSync(tempPath) } catch{}
+    try { if(tempPath) fs.unlinkSync(tempPath) } catch{}
   }
 })

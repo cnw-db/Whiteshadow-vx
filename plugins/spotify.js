@@ -5,13 +5,61 @@ const { cmd } = require('../command');
 // 1️⃣ Spotify Search Command
 //////////////////////////////
 
+cmd({
+    pattern: 'spotify',
+    alias: ['sp'],
+    desc: 'Search & download Spotify song',
+    type: 'downloader',
+    react: '🎧',
+    filename: __filename
+}, async (conn, mek, m, { text, from, reply }) => {
+    try {
+        if (!text) return reply('❌ *Song name එකක් දාන්න*\n\nExample:\n.spotify Lelena');
+
+        const api = `https://private-api-whiteshadow-md.vercel.app/Spotify?input=${encodeURIComponent(text)}`;
+        const res = await axios.get(api);
+        const data = res.data;
+
+        if (!data || !data.metadata || !data.audio)
+            return reply('❌ Spotify song එක හම්බුනේ නැහැ');
+
+        const { title, artist, duration, cover, url } = data.metadata;
+        const audio = data.audio;
+
+        // 🎴 Info card
+        await conn.sendMessage(from, {
+            image: { url: cover },
+            caption:
+`🎵 *Spotify Track Found*
+
+📌 *Title:* ${title}
+👤 *Artist:* ${artist}
+⏱ *Duration:* ${duration}
+🔗 *Spotify:* ${url}
+
+⬇️ *Downloading audio...*`
+        }, { quoted: mek });
+
+        // 🎧 Audio
+        await conn.sendMessage(from, {
+            audio: { url: audio.url },
+            mimetype: 'audio/mpeg',
+            fileName: audio.name,
+            ptt: false
+        }, { quoted: mek });
+
+    } catch (e) {
+        console.log(e);
+        reply('❌ Spotify download failed. Later try කරන්න.');
+    }
+});
  //////////////////////////////
 // 1️⃣ Spotify Search Command
 //////////////////////////////
 cmd({
-    pattern: 'spotify',
+    pattern: 'spotifysearch',
     desc: 'Search Spotify tracks and send all results',
-    alias: ['sp'],
+    alias: ['sps'],
     type: 'search',
     react: '🔍',
     filename: __filename
@@ -27,7 +75,7 @@ cmd({
         results.forEach((track, i) => {  // ✅ All results, no slice
             msg += `*${i+1}.* ${track.title}\n👤 ${track.artist}\n⏱ ${track.duration}\n🔗 ${track.url}\n\n`;
         });
-        msg += 'Use `.sptdl <Spotify URL>` to download a track.';
+        msg += 'Use `.spotify <correct name>` to download a track.';
 
         await conn.sendMessage(from, { text: msg }, { quoted: mek });
 
@@ -40,37 +88,3 @@ cmd({
 //////////////////////////////
 // 2️⃣ Spotify Download Command
 //////////////////////////////
-cmd({
-    pattern: 'sptdl',
-    desc: 'Download Spotify track using URL',
-    alias: ['spotifydl'],
-    type: 'downloader',
-    react: '🎵',
-    filename: __filename
-}, async (conn, mek, m, { text, from, reply }) => {
-    if (!text) return reply('❌ Please provide a Spotify track URL.');
-
-    try {
-        const downloadRes = await axios.get(`https://spotify-api-dli.vercel.app/spotifydl?url=${text}`);
-        const trackData = downloadRes.data;
-
-        if (!trackData.status) return reply('❌ Failed to download Spotify track.');
-
-        // Send details card with thumbnail
-        await conn.sendMessage(from, {
-            image: { url: trackData.thumbnail },
-            caption: `🎵 *Title:* ${trackData.title}\n👤 *Artist:* ${trackData.artist}\n⏱ *Duration:* ${trackData.duration}`,
-        }, { quoted: mek });
-
-        // Send audio
-        await conn.sendMessage(from, {
-            audio: { url: trackData.download_url },
-            mimetype: 'audio/mpeg',
-            ptt: false
-        }, { quoted: mek });
-
-    } catch (err) {
-        console.log(err.response?.data || err.message);
-        reply('❌ Failed to download Spotify track. Check the URL or try again later.');
-    }
-});

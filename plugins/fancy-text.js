@@ -16,7 +16,7 @@ cmd({
       );
     }
 
-    const apiUrl = `https://movanest.zone.id/v2/fancytext?word=${encodeURIComponent(q)}`;
+    const apiUrl = `https://movanest.xyz/v2/fancytext?word=${encodeURIComponent(q)}`;
     const { data } = await axios.get(apiUrl);
 
     if (!data || !data.status || !Array.isArray(data.results)) {

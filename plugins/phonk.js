@@ -12,27 +12,33 @@ cmd({
   pattern: 'phonk',
   alias: ['phonkplay', 'phonkdl'],
   react: '🎧',
-  desc: 'Send trending phonk song to WhatsApp Channel',
+  desc: 'Send phonk song to WhatsApp Channel',
   category: 'channel',
-  use: '.phonk <youtube link>/<channelJid>',
+  use: '.phonk <youtube link> | <channelJid>',
   filename: __filename,
 }, async (conn, mek, m, { reply, q }) => {
   try {
-    // ─── ARGUMENT CHECK ───
-    if (!q || !q.includes('/')) {
+    // ─── ARGUMENT PARSE ───
+    if (!q || !q.includes('|')) {
       return reply(
-        `⚠️ Usage:\n.phonk https://youtu.be/xxxx/120363397446799567@newsletter`
+        `⚠️ Usage:\n.phonk https://youtu.be/xxxx | 120363xxxxxxxxx@newsletter`
       );
     }
 
-    const [ytInput, channelJidRaw] = q.split('/').map(v => v.trim());
-    const channelJid = channelJidRaw || '';
+    let [ytInput, channelJidRaw] = q.split('|');
 
+    ytInput = ytInput.trim();
+    let channelJid = channelJidRaw
+      .trim()
+      .replace(/\s+/g, '')
+      .replace(/\u200B/g, '');
+
+    // ─── VALIDATION ───
     if (!ytInput.startsWith('http')) {
-      return reply('❌ YouTube link එකක් දෙන්න.');
+      return reply('❌ Valid YouTube link එකක් දෙන්න.');
     }
 
-    if (!channelJid.endsWith('@newsletter')) {
+    if (!channelJid.includes('@newsletter')) {
       return reply('❌ Channel JID වැරදියි (@newsletter check කරන්න)');
     }
 
@@ -60,7 +66,7 @@ cmd({
 
     const dlUrl = data.results.recommended.dlurl;
 
-    // ─── THUMBNAIL BUFFER ───
+    // ─── THUMBNAIL ───
     let thumbBuffer = null;
     try {
       if (meta.thumb) {
@@ -81,7 +87,7 @@ cmd({
 > *Phonk Hub 🍄 SL 🇱🇰*
 `;
 
-    // ─── SEND IMAGE CARD ───
+    // ─── SEND IMAGE ───
     await conn.sendMessage(
       channelJid,
       {
@@ -91,7 +97,7 @@ cmd({
       { quoted: mek }
     );
 
-    // ─── TEMP PATHS ───
+    // ─── TEMP FILES ───
     const tempDir = path.join(__dirname, '../temp');
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
 
@@ -103,8 +109,7 @@ cmd({
     const audioRes = await fetch(dlUrl);
     if (!audioRes.ok) return reply('❌ Audio download error.');
 
-    const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
-    fs.writeFileSync(mp3Path, audioBuffer);
+    fs.writeFileSync(mp3Path, Buffer.from(await audioRes.arrayBuffer()));
 
     // ─── CONVERT TO OPUS ───
     await new Promise((resolve, reject) => {
@@ -132,9 +137,9 @@ cmd({
     try { fs.unlinkSync(mp3Path); } catch {}
     try { fs.unlinkSync(opusPath); } catch {}
 
-    reply(`✅ Phonk track sent successfully to:\n${channelJid}`);
+    reply(`✅ Phonk sent successfully to:\n${channelJid}`);
   } catch (err) {
     console.error('PHONK ERROR:', err);
-    reply('⚠️ Phonk send error. Try again later.');
+    reply('⚠️ Error while sending phonk.');
   }
 });

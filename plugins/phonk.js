@@ -13,24 +13,25 @@ cmd({
   react: '🎧',
   desc: 'Send phonk song to WhatsApp Channel',
   category: 'channel',
-  use: '.phonk <youtube_url>/<channelJid>',
+  use: '.phonk <youtube_url> | <channelJid@newsletter>',
   filename: __filename
 }, async (conn, mek, m, { reply, q }) => {
   try {
     // ─── ARGUMENT CHECK ───
-    if (!q || !q.includes('/')) {
-      return reply('⚠️ Usage:\n.phonk https://youtu.be/xxxx/120363397446799567@newsletter')
+    if (!q || !q.includes('|')) {
+      return reply(
+        '⚠️ Usage:\n.phonk https://youtu.be/xxxx | 120363397446799567@newsletter'
+      )
     }
 
-    const [ytUrl, channelJidRaw] = q.split('/').map(v => v.trim())
-    const channelJid = channelJidRaw || ''
+    const [ytUrl, channelJid] = q.split('|').map(v => v.trim())
+
+    if (!ytUrl.startsWith('http')) {
+      return reply('❌ Valid YouTube link එකක් දෙන්න.')
+    }
 
     if (!channelJid.endsWith('@newsletter')) {
       return reply('❌ *Channel JID වැරදියි!* (@newsletter ending check කරන්න)')
-    }
-
-    if (!ytUrl.startsWith('http')) {
-      return reply('❌ YouTube link එකක් දෙන්න.')
     }
 
     // ─── FETCH FROM SAVETUBE API ───
@@ -40,7 +41,7 @@ cmd({
 
     const json = await res.json()
     if (!json.status || !json.result?.download_url) {
-      return reply('❌ Audio data fetch failed.')
+      return reply('❌ Audio fetch failed.')
     }
 
     const meta = json.result
@@ -66,12 +67,13 @@ cmd({
     `.trim()
 
     // ─── SEND IMAGE CARD ───
-    await conn.sendMessage(channelJid, {
-      image: thumb,
-      caption
-    }, { quoted: mek })
+    await conn.sendMessage(
+      channelJid,
+      { image: thumb, caption },
+      { quoted: mek }
+    )
 
-    // ─── TEMP PATHS ───
+    // ─── TEMP FILES ───
     const tempDir = path.join(__dirname, '../temp')
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true })
 
@@ -97,11 +99,15 @@ cmd({
     })
 
     // ─── SEND VOICE NOTE ───
-    await conn.sendMessage(channelJid, {
-      audio: fs.readFileSync(opusPath),
-      mimetype: 'audio/ogg; codecs=opus',
-      ptt: true
-    }, { quoted: mek })
+    await conn.sendMessage(
+      channelJid,
+      {
+        audio: fs.readFileSync(opusPath),
+        mimetype: 'audio/ogg; codecs=opus',
+        ptt: true
+      },
+      { quoted: mek }
+    )
 
     // ─── CLEANUP ───
     try { fs.unlinkSync(mp3Path) } catch {}
@@ -109,8 +115,8 @@ cmd({
 
     reply(`✅ Phonk sent to channel:\n${channelJid}`)
 
-  } catch (e) {
-    console.error('phonk error:', e)
+  } catch (err) {
+    console.error('phonk error:', err)
     reply('⚠️ Error sending phonk track.')
   }
 })
